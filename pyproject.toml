@@ -1,0 +1,30 @@
+[project]
+name = "PhysML"
+version = "0.1.0"
+description = ""
+authors = [
+    {name="Daniel Springer", email="daniel.springer@tuwien.ac.at"}, 
+    {name="Sebastian Hepp", email="e1015083@student.tuwien.ac.at"},
+]
+readme = "README.md"
+requires-python = "==3.12.*"
+dependencies = [
+    "h5py ==3.12.*",
+    "lightning ==2.4.*",
+    "matplotlib ==3.10.*",
+    "numpy ==1.26.*,<2.0",
+    "scipy ==1.14.*",
+    "tensorboard ==2.18.*",
+    "tqdm ==4.67.*",
+    "torch ==2.5.*",
+    "torchvision ==0.20.*",
+]
+
+[tool.uv.sources]
+torch = { index = "torch" }
+torchvision = { index = "torch" }
+
+[[tool.uv.index]]
+name = "torch"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true

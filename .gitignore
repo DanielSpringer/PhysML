@@ -1,0 +1,4 @@
+.venv
+/saves/*/
+__pycache__
+slurm-*.out
