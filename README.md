@@ -28,8 +28,8 @@
   https://jupyterhub.vsc.ac.at/hub/
   * install dependencies (run in Jupyter-cell):
     ```jupyter
-    !pip install -r requirements.txt
-    !pip install torch==2.5.0 torchvision==0.20.0 torchaudio==2.5.0 --index-url https://download.pytorch.org/whl/cu121
+    %pip install -r requirements.txt
+    %pip install torch==2.5.0 torchvision==0.20.0 torchaudio==2.5.0 --index-url https://download.pytorch.org/whl/cu121
     
     from IPython.display import display, HTML
     display(HTML("<style>.jp-Cell { width: 100% !important;margin-left:00px}</style>"))
@@ -49,7 +49,6 @@
     ```shell
     scontrol show job <job-id>
     ```
-        scontrol show job <job-id>
 * show job status
     ```shell
     squeue -j <job-id>

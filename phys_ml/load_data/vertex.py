@@ -8,6 +8,8 @@ import numpy as np
 
 import torch
 
+from tqdm import tqdm
+
 from ..config.vertex import *
 from . import FilebasedDataset
 
@@ -29,7 +31,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         # Subsample files
         file_paths = glob.glob(f"{config.path_train}/*.h5")
         subset = config.subset
-        if subset is not None:
+        if subset > 0 and subset is not None:
             n_files = len(file_paths)
             if type(subset) == float:
                 subset = int(n_files * subset)
@@ -136,6 +138,11 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
         return vertex.reshape((cls.length,) * cls.k_dim, order='F')
 
 
+# run with:
+# ```
+# cd <...>/PhysML
+# python -c "from phys_ml.load_data import vertex;vertex.convert_3d_to_6d_vertex('../frgs')"
+# ```
 def convert_3d_to_6d_vertex(data_dir: str) -> None:
     import os
     from pathlib import Path
@@ -147,14 +154,17 @@ def convert_3d_to_6d_vertex(data_dir: str) -> None:
     os.makedirs(new_dir, exist_ok=True)
 
     file_paths = glob.glob(f"{data_dir}/*.h5")
-    for file_path in file_paths:
-        # load 3-dimensional vertex matrix
-        vertex3 = AutoEncoderVertexDataset.load_from_file(file_path)
+    with tqdm(total=len(file_paths)) as prog:
+        for file_path in file_paths:
+            # load 3-dimensional vertex matrix
+            vertex3 = AutoEncoderVertexDataset.load_from_file(file_path)
 
-        # reshape to a 24^6 matrix
-        vertex6 = vertex3.reshape((n_freq,) * dim)
-        
-        # store 6-dimesnional vertex matrix to disk
-        file_name = Path(file_path).name
-        with h5py.File(new_dir / file_name, 'w') as file:
-            file.create_dataset("V/step0", data=vertex6, compression='lzf')
+            # reshape to a 24^6 matrix
+            vertex6 = vertex3.reshape((n_freq,) * dim)
+            
+            # store 6-dimesnional vertex matrix to disk
+            file_name = Path(file_path).name
+            with h5py.File(new_dir / file_name, 'w') as file:
+                file.create_dataset("V/step0", data=vertex6, compression='lzf')
+            
+            prog.update()

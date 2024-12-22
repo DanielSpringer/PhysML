@@ -10,12 +10,16 @@
         "batch_size": 20,
         "learning_rate": 1e-4,
         "weight_decay": 1e-5,
-        "epochs": 100,
+        "epochs": 1000,
         "hidden_dims": [1024, 512, 256, 128],
         "out_dim": 576,
         "device_type": "gpu",
         "devices": 2,
         "num_nodes": 1,
+
+        "subset": -1, 
+        "subset_shuffle": true, 
+        "subset_seed": 42,
         
         "construction_axis": 3,
         "sample_count_per_vertex": 2000,
@@ -23,18 +27,16 @@
     },
     "SLURM_CONFIG": {
         "project_name": "vertex", 
-        "script_name": "vsc_test", 
+        "script_name": "test", 
         "pyenv_dir": "/gpfs/data/fs71925/shepp123/PhysML/.venv",
         "trainer": "VertexTrainer", 
         "trainer_kwargs": {
-            "project_name": "vertex", 
             "config_name": "confmod_auto_encoder.json", 
-            "subconfig_name": "AUTO_ENCODER_VERTEX", 
-            "config_kwargs": {
-                "subset": 10, 
-                "subset_shuffle": true, 
-                "subset_seed": 42
-            }
+            "subconfig_name": "AUTO_ENCODER_VERTEX"
+        },
+        "slurm_options": {
+            "qos": "zen3_0512_a100x2_devel",
+            "time": "00:10:00"
         }
     },
 
@@ -53,8 +55,12 @@
         "hidden_dims": [128, 64, 32],
         "out_dim": 24,
         "device_type": "gpu",
-        "devices": 1,
+        "devices": 2,
         "num_nodes": 1,
+
+        "subset": 10, 
+        "subset_shuffle": true, 
+        "subset_seed": 42,
         
         "construction_axis": 3,
         "sample_count_per_vertex": 2000,
@@ -62,18 +68,16 @@
     },
     "SLURM_CONFIG_24X6": {
         "project_name": "vertex", 
-        "script_name": "vsc_24x6", 
+        "script_name": "24x6", 
         "pyenv_dir": "/gpfs/data/fs71925/shepp123/PhysML/.venv",
         "trainer": "VertexTrainer24x6", 
         "trainer_kwargs": {
-            "project_name": "vertex", 
             "config_name": "confmod_auto_encoder.json", 
-            "subconfig_name": "AUTO_ENCODER_VERTEX_24X6", 
-            "config_kwargs": {
-                "subset": 10, 
-                "subset_shuffle": true, 
-                "subset_seed": 42
-            }
+            "subconfig_name": "AUTO_ENCODER_VERTEX_24X6"
+        },
+        "slurm_options": {
+            "qos": "zen3_0512_a100x2",
+            "time": "04:00:00"
         }
     }
 }

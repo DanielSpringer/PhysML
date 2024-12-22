@@ -13,22 +13,19 @@ from ..config import Config
 class SlurmOptions:
     mail_type: str = 'BEGIN'
     mail_user: str = '<email@address.at>'
-    partition: str = 'zen3_0512_a100x2'                               # see available resources on VSC via `sqos`-command
-    qos: str = 'zen3_0512_a100x2_devel'
+    qos: str = 'zen3_0512_a100x2_devel'                               # see available resources on VSC via `sqos`-command
     time: str = '00:10:00'                                            # must be <= '00:10:00' for '_devel' nodes
-
-    def __post_init__(self) -> None:
-        self.partition = self.qos.removesuffix('_devel')
-
-
-def create_train_script(project_name: str, base_dir: str|Path, trainer: str|None = None, 
-                        trainer_kwargs: dict[str, Any]|None = None) -> None:
-    def create_args_string(dic: dict[str, Any]) -> str:
-        return ', '.join([f'{k}={repr(v)}' for k, v in dic.items()])
     
-    etxra_kwargs = trainer_kwargs.pop('config_kwargs', {})
-    args_string = create_args_string(trainer_kwargs)
-    args_string += ', ' + create_args_string(etxra_kwargs)
+    @property
+    def partition(self) -> str:
+        return self.qos.removesuffix('_devel')
+
+
+def create_train_script(project_name: str, script_name: str, base_dir: str|Path, trainer: str|None = None, 
+                        trainer_kwargs: dict[str, Any]|None = None) -> None:
+    extra_kwargs = trainer_kwargs.pop('config_kwargs', {})
+    trainer_kwargs.update(extra_kwargs)
+    args_string = ', '.join([f'{k}={repr(v)}' for k, v in trainer_kwargs.items()])
 
     s = f"""import sys, os
 sys.path.append(os.getcwd())
@@ -46,7 +43,7 @@ if __name__ == '__main__':
 """
     fdir = Path(base_dir, 'train_scripts', project_name)
     fdir.mkdir(parents=True, exist_ok=True)
-    (fdir / f'train_{project_name}.py').write_text(s)
+    (fdir / f'train_{script_name}.py').write_text(s)
 
 
 def create(project_name: str, script_name: str, pyenv_dir: str,
@@ -76,16 +73,18 @@ def create(project_name: str, script_name: str, pyenv_dir: str,
         Kwargs for instantiating the trainer-class in the train-script.\n
         Only required if `train_script_name` is not given. (defaults to None)
     """
-    config_cls: type[Config] = getattr(importlib.import_module('src.trainer'), trainer).config_cls
-    config = config_cls.from_json(trainer_kwargs['config_name'], trainer_kwargs['subconfig_name'], 
-                                  trainer_kwargs['config_dir'], **trainer_kwargs['config_kwargs'])
+    config_cls: type[Config] = getattr(importlib.import_module('phys_ml.trainer'), trainer).config_cls
+    config_kwargs = {k: trainer_kwargs[k] 
+                     for k in ['config_name', 'subconfig_name', 'config_dir', 'config_kwargs'] 
+                     if k in trainer_kwargs}
+    config = config_cls.from_json(**config_kwargs)
     venv_files = Path(pyenv_dir, '*').as_posix()
     source_path = Path(pyenv_dir, 'bin/activate').as_posix()
     current_base_dir = Path(__file__).parent.parent.parent
     
     if not train_script_name:
-        create_train_script(project_name, current_base_dir, trainer, trainer_kwargs)
-        train_script_name = f'train_{project_name}.py'
+        create_train_script(project_name, script_name, current_base_dir, trainer, trainer_kwargs)
+        train_script_name = f'train_{script_name}.py'
     train_script_path = (current_base_dir / 'train_scripts' / project_name / train_script_name).as_posix()
     
     s = f"""#!/bin/bash
@@ -95,7 +94,7 @@ def create(project_name: str, script_name: str, pyenv_dir: str,
 #SBATCH --mail-user={slurm_options.mail_user}    # and then your email address
 
 #SBATCH --partition={slurm_options.partition}
-#SBATCH --qos {slurm_options.qos}
+#SBATCH --qos={slurm_options.qos}
 #SBATCH --ntasks-per-node={config.devices // config.num_nodes}
 #SBATCH --nodes={config.num_nodes}
 #SBATCH --time={slurm_options.time}
@@ -107,7 +106,7 @@ srun uv run {train_script_path}
 """
     fdir = current_base_dir / 'slurm' / project_name
     fdir.mkdir(parents=True, exist_ok=True)
-    (fdir / f'{script_name}.slrm').write_text(s)
+    (fdir / f'vsc_{script_name}.slrm').write_text(s)
 
 
 def create_from_config(config_file: str|Path, slurm_config_name: str = 'SLURM_CONFIG') -> None:
@@ -132,4 +131,4 @@ def create_from_config(config_file: str|Path, slurm_config_name: str = 'SLURM_CO
 
 
 if __name__ == '__main__':
-    create_from_config(sys.argv[1])
+    create_from_config(sys.argv[1], sys.argv[2])

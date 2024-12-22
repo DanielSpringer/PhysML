@@ -1,8 +1,8 @@
 #!/bin/bash
 #
 #SBATCH -J vertex
-#SBATCH --mail-type=BEGIN,END                        # first have to state the type of event to occur 
-#SBATCH --mail-user=e1015083@student.tuwien.ac.at    # and then your email address
+#SBATCH --mail-type=BEGIN    # first have to state the type of event to occur 
+#SBATCH --mail-user=<email@address.at>    # and then your email address
 
 #SBATCH --partition=zen3_0512_a100x2
 #SBATCH --qos zen3_0512_a100x2_devel
@@ -13,4 +13,4 @@
 FILES=(/gpfs/data/fs71925/shepp123/PhysML/.venv/*)
 source /gpfs/data/fs71925/shepp123/PhysML/.venv/bin/activate
 
-srun uv run /gpfs/data/fs71925/shepp123/PhysML/train_scripts/vertex/train_vertex.py
+srun uv run C:/OneDrive - TU Wien/Studium/Master_5. Semester/Masters thesis/code/PhysML/train_scripts/vertex/train_vertex.py
