@@ -10,37 +10,40 @@ cmap_big = mpl.colormaps['twilight_shifted'].resampled(int(1e3))
 cmap_resc = mplcolors.ListedColormap(cmap_big(np.linspace(0.075, 0.925, 10000)))
 
 
+def _plot(data: np.ndarray, ax: axes.Axes, max_value: float, x_label: str, y_label: str,
+          colmap: str|mplcolors.Colormap, vmin: float|None = None, vmax: float|None = None):
+    cmap = colmap if colmap else cmap_resc
+    img = ax.imshow(data, cmap=cmap, vmax=max_value)
+    if vmin is not None and vmax is not None:
+        img.set_clim(vmin=vmin, vmax=vmax)
+    ax.set_xticks([]) 
+    ax.set_yticks([])
+    ax.set_xlabel(x_label, fontsize=14)
+    ax.set_ylabel(y_label, fontsize=14)
+    return img
+
+
 def _create_plot(ax: axes.Axes, data: np.ndarray, k: int, max_value: float, axis: int, 
                  colmap: str|mplcolors.Colormap|None = None):
-    cmap = colmap if colmap else cmap_resc
     data_slice = [slice(None)] * 3
     data_slice[axis - 1] = k
     d = data[*data_slice]
-
-    img = ax.imshow(d, cmap=cmap, vmax=max_value)
-    ax.set_xticks([]) 
-    ax.set_yticks([])
-
+    
     axs_range = np.arange(1,4)
     printed_axs = axs_range[axs_range != axis]
-    ax.set_xlabel(f'$k_{printed_axs[0]}$', fontsize=14)
-    ax.set_ylabel(f'$k_{printed_axs[1]}$', fontsize=14)
+    x_label, y_label = (f'$k_{pa}$' for pa in printed_axs)
+    img = _plot(d, ax, max_value, x_label, y_label, colmap)
     return img
 
 
 def _create_plot_24x6(ax: axes.Axes, data: np.ndarray, k: int, kix: int, kiy: int, kjx: int, kjy: int, 
                       max_value: float, colmap: str|mplcolors.Colormap|None = None):
-    cmap = colmap if colmap else cmap_resc
     data_slice = [kix, kiy, kjx, kjy]
     [data_slice.insert(i + 2 * (k - 1), slice(None)) for i in range(2)]
     d = data[*data_slice]
 
-    img = ax.imshow(d, cmap=cmap, vmax=max_value)
-    ax.set_xticks([]) 
-    ax.set_yticks([])
-
-    ax.set_xlabel(f'$k_{{{k}_x}}$', fontsize=14)
-    ax.set_ylabel(f'$k_{{{k}_y}}$', fontsize=14)
+    x_label, y_label = f'$k_{{{k}_x}}$', f'$k_{{{k}_y}}$'
+    img = _plot(d, ax, max_value, x_label, y_label, colmap)
     return img
 
 
@@ -78,4 +81,18 @@ def plot_comparison(target: np.ndarray, pred: np.ndarray, k: int, figsize: tuple
             ax.set_title("Prediction")
     fig.colorbar(img, ax=axs)
     if show_title:
-        fig.suptitle(fr"Reconstruction for fixed $k_{axis}$", fontsize=16)
+        fig.suptitle(fr"Reconstruction for $k_{axis}$", fontsize=16)
+
+
+def plot_comparison_24x6(target: np.ndarray, pred: np.ndarray, kix: int, kiy: int, kjx: int, kjy: int, 
+                         figsize: tuple[int, int] = (14,6), k: int = 3, 
+                         colmap: str|mplcolors.Colormap|None = None):
+    max_value = np.max([target, pred])
+    fig, axs = plt.subplots(1, 2, figsize=figsize, subplot_kw={'aspect': 'equal'})
+    for i, (ax, d) in enumerate(zip(axs, [target, pred])):
+        img = _create_plot_24x6(ax, d, k, kix, kiy, kjx, kjy, max_value, colmap)
+        if i == 0:
+            ax.set_title("Target")
+        else:
+            ax.set_title("Prediction")
+    fig.colorbar(img, ax=axs)
