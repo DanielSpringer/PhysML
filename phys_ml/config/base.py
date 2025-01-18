@@ -32,7 +32,8 @@ class Config(Generic[R, S, T]):
     _data_loader: str = 'torch.utils.data.DataLoader'                # name of the data loader class
     sample_seed: int = 42                                            # seed for data sampling
     test_ratio: float = 0.2                                          # ratio of test data
-    subset: int|float|None = None                                    # either number or ratio of data files to load
+    subset: int|float|None = None                                    # either number or ratio of data files to load, 
+                                                                     #   if negative gives the number of files NOT to load
     subset_shuffle: bool = True                                      # randomly select data files
     subset_seed: int = 42                                            # seed for random data file selection
     

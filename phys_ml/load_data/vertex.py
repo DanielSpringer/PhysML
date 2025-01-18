@@ -31,11 +31,13 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         # Subsample files
         file_paths = glob.glob(f"{config.path_train}/*.h5")
         subset = config.subset
-        if subset is not None and subset > 0:
+        if subset is not None and subset != 0:
             n_files = len(file_paths)
             if type(subset) == float:
                 subset = int(n_files * subset)
             if subset < n_files:
+                if subset < 0:
+                    subset = n_files + subset
                 if config.subset_shuffle:
                     random.seed(config.subset_seed)
                     file_paths = random.sample(file_paths, max(subset, 1))
