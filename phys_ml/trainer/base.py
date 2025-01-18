@@ -151,13 +151,18 @@ class BaseTrainer(Generic[T, S, R]):
                                                  num_workers=8, persistent_workers=True, pin_memory=True)
         return train_dataloader, validation_dataloader
 
-    def set_logging(self) -> TensorBoardLogger:
+    def set_logging(self, ckpt_path: str) -> TensorBoardLogger:
         """
         Set TensorBoardLogger and ModelCheckpoint.\n
         Overwrite for custom logging.
         """
-        save_path = self.save_prefix + str(datetime.datetime.now().date())
-        logger = TensorBoardLogger(self.get_full_save_path(''), name=save_path)
+        if ckpt_path:
+            save_path = Path(ckpt_path).parents[2].name
+            version = int(Path(ckpt_path).parents[1].name.split('_')[-1])
+        else:
+            save_path = self.save_prefix + str(datetime.datetime.now().date())
+            version = None
+        logger = TensorBoardLogger(self.get_full_save_path(''), name=save_path, version=version)
         self.config.save_path = logger.log_dir
         return logger
 
@@ -227,7 +232,7 @@ class BaseTrainer(Generic[T, S, R]):
         """
         self.config = self.config_cls.from_json('config.json', directory=save_path, save_path=save_path)
 
-    def load_model(self, save_path: str|None = None) -> None:
+    def load_model(self, save_path: str|None = None) -> str:
         """
         Loads a model and corresponding config into the trainer. 
         Loads the model either from a given checkpoint filepath 
@@ -245,18 +250,18 @@ class BaseTrainer(Generic[T, S, R]):
         """
         assert save_path or self.config.save_path, ("No save_path found in the config-file, "
                                                     "please provide a save_path.")
-        save_path: Path = Path(save_path)
+        
+        save_path: Path = Path(save_path or self.config.save_path)
         if not save_path.is_absolute():
             save_path = self.get_full_save_path(save_path)
         if not save_path.suffix == '.ckpt':
             ckpt_files = glob.glob((save_path / '**/*.ckpt').as_posix(), recursive=True)
-            save_path = max(ckpt_files, key=os.path.getctime)
-        print(f" >>> Load checkpoint from '{save_path}'")
-        self.load_config(Path(save_path).parent.parent.as_posix())
-        device = self.get_device_from_accelerator(self.config.device_type)
-        checkpoint = torch.load(save_path, map_location=device, weights_only=True)
-        self.wrapper = self.config.model_wrapper(self.config, self.input_size)
-        self.wrapper.load_state_dict(checkpoint['state_dict'])
+            ckpt_path = max(ckpt_files, key=os.path.getctime)
+        else:
+            ckpt_path = save_path.as_posix()
+        print(f" >>> Load checkpoint from '{ckpt_path}'")
+        self.load_config(Path(ckpt_path).parent.parent.as_posix())
+        return ckpt_path
 
     def _train(self, train_mode: TrainerModes) -> None:
         """
@@ -271,18 +276,17 @@ class BaseTrainer(Generic[T, S, R]):
         """
         ''' Dataloading '''
         train_dataloader, validation_dataloader = self.create_data_loader()
-
-        ''' Model setup '''
-        in_dim = self.input_size
-        self.wrapper = self.config.model_wrapper(self.config, in_dim)
         
-        ''' Model loading from save file '''
+        ''' Model setup '''
+        ckpt_path = None
         if self.config.resume == True:
-            self.load_model()
+            ''' Model loading from checkpoint file '''
+            ckpt_path = self.load_model()
             print(" >>> Loaded checkpoint")
+        self.wrapper = self.config.model_wrapper(self.config, self.input_size)
 
         ''' Logging and checkpoint saving '''
-        logger = self.set_logging()
+        logger = self.set_logging(ckpt_path)
 
         ''' Set pytorch_lightning Trainer '''
         callbacks = [self.config.get_model_checkpoint(), *self.config.get_callbacks()]
@@ -301,7 +305,7 @@ class BaseTrainer(Generic[T, S, R]):
                               strategy='auto', logger=logger, plugins=[LightningEnvironment()], callbacks=callbacks)
         
         ''' Train '''
-        trainer.fit(self.wrapper, train_dataloader, validation_dataloader)
+        trainer.fit(self.wrapper, train_dataloader, validation_dataloader, ckpt_path=ckpt_path)
         
         ''' Saving config-file ''' 
         json_object = json.dumps(self.config.as_dict(), indent=4)

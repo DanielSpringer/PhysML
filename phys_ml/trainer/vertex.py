@@ -133,20 +133,29 @@ class VertexTrainer24x6(VertexTrainer):
         new_data = super().prepare_prediciton(vertex_path, new_vertex, save_path, load_model)
         return new_data, axis
     
-    def _prepare_slice_prediction_matrix(self, dim: int) -> np.ndarray:
-        return np.zeros((self.dataset.n_freq,) * dim)
+    def _prepare_slice_prediction_matrix(self, dim: int, encode_only: bool = False, 
+                                         insert_at: int|None = None) -> np.ndarray:
+        if encode_only:
+            assert insert_at is not None, "If `encode_only` is True, `insert_at` must be provided."
+            shape = (self.dataset.n_freq,) * dim
+            shape[insert_at] = self.config.hidden_dims[-1]
+            return np.zeros(shape)
+        else:
+            return np.zeros((self.dataset.n_freq,) * dim)
 
     def predict_slice2d(self, new_vertex_path: str, kix: int, kiy: int, kjx: int|None, kjy: int|None, 
                         new_vertex: np.ndarray|None = None, save_path: str|None = None, 
-                        load_model: bool = False) -> np.ndarray:
+                        load_model: bool = False, encode_only: bool = False) -> np.ndarray:
         assert kix >= 1 and kix <= self.dataset.n_freq, f"kix must be in range [1,{self.dataset.n_freq}]"
         assert kiy >= 1 and kiy <= self.dataset.n_freq, f"kiy must be in range [1,{self.dataset.n_freq}]"
         assert kjx >= 1 and kjx <= self.dataset.n_freq, f"kjx must be in range [1,{self.dataset.n_freq}]"
         assert kjy >= 1 and kjy <= self.dataset.n_freq, f"kjy must be in range [1,{self.dataset.n_freq}]"
         
         vertex, axis = self._prepare_slice_prediciton(new_vertex_path, new_vertex, save_path, load_model)
-        result = self._prepare_slice_prediction_matrix(dim=2)
         ins_at = (axis - 1) // 2 * 2
+        pred_insert_idx = (axis - 1) % 2
+        result = self._prepare_slice_prediction_matrix(dim=2, encode_only=encode_only, 
+                                                       insert_at=pred_insert_idx)
         with tqdm(total=self.dataset.n_freq) as prog:
             for idx in range(self.dataset.n_freq):
                 random_idx = random.randint(0, self.dataset.n_freq - 1)
@@ -156,34 +165,38 @@ class VertexTrainer24x6(VertexTrainer):
                 coord.insert(ins_at, slice_coord[0])
                 
                 # get prediction of length 24 for an axis
-                pred = self._predict_sample(vertex, coord)
+                pred = self._predict_sample(vertex, coord, encode_only)
                 
                 # feed back predictions into 24^6-matrix
-                slice_coord[(axis - 1) % 2] = slice(None)  # set the index for the prediction axis to the full axis
+                slice_coord[pred_insert_idx] = slice(None)  # set the index for the prediction axis to the full axis
                 result[*slice_coord] = pred   # assign the prediction to this axis
                 prog.update()
 
         filename = f'{Path(new_vertex_path).stem}_{kix}_{kiy}_{kjx}_{kjy}'
-        self._save_prediction(result, filename, subfolder='prediction_slices')
+        subfolder = 'latentspace_slices' if encode_only else 'prediction_slices'
+        self._save_prediction(result, filename, subfolder)
         return result
     
     def predict_slice4d(self, new_vertex_path: str, kix: int, kiy: int, other_k: int = 2,
                         new_vertex: np.ndarray|None = None, save_path: str|None = None, 
-                        load_model: bool = False) -> np.ndarray:
+                        load_model: bool = False, encode_only: bool = False) -> np.ndarray:
         assert other_k >= 1 and other_k <= self.dataset.k_dim, f"`other_k` must be in range [1,{self.dataset.k_dim}]"
         assert other_k != ((self.config.construction_axis + 1) // 2), \
             f"`other_k` must be refer to a different k_i than `axis`."
         assert kix >= 1 and kix <= self.dataset.n_freq, f"`kix` must be in range [1,{self.dataset.n_freq}]"
         assert kiy >= 1 and kiy <= self.dataset.n_freq, f"`kiy` must be in range [1,{self.dataset.n_freq}]"
         
+
         vertex, axis = self._prepare_slice_prediciton(new_vertex_path, new_vertex, save_path, load_model)
-        result = self._prepare_slice_prediction_matrix(dim=4)
         k = (axis + 1) // 2
         remaining_k = sum(range(1, self.dataset.k_dim + 1)) - k - other_k
         ins_remaining = (remaining_k - 1) * 2
         ins_other = (other_k > k) * 2
         a_idx_range = range(self.dataset.n_freq)
         b_idx_range = range(self.dataset.n_freq)
+        pred_insert_idx = 2 - ins_other + ((axis - 1) % 2)
+        result = self._prepare_slice_prediction_matrix(dim=4, encode_only=encode_only, 
+                                                       insert_at=pred_insert_idx)
         with tqdm(total=self.dataset.n_freq**3) as prog:
             for a_idx in a_idx_range:
                 for b_idx in b_idx_range:
@@ -197,13 +210,14 @@ class VertexTrainer24x6(VertexTrainer):
                         coord.insert(ins_remaining, kix)
 
                         # get prediction of length 24 for an axis
-                        pred = self._predict_sample(vertex, coord)
+                        pred = self._predict_sample(vertex, coord, encode_only)
                         
                         # feed back predictions into 24^6-matrix
-                        slice_coord[2 - ins_other + ((axis - 1) % 2)] = slice(None)  # set the index for the prediction axis to the full axis
+                        slice_coord[pred_insert_idx] = slice(None)  # set the index for the prediction axis to the full axis
                         result[*slice_coord] = pred   # assign the prediction to this axis
                         prog.update()
         
         filename = f'{Path(new_vertex_path).stem}_{kix}_{kiy}_k{other_k}'
-        self._save_prediction(result, filename, subfolder='prediction_slices')
+        subfolder = 'latentspace_slices' if encode_only else 'prediction_slices'
+        self._save_prediction(result, filename, subfolder)
         return result
