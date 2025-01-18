@@ -1,2 +1,2 @@
 from .base import *
-from .vertex import *
+from . import vertex

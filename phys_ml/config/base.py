@@ -30,10 +30,11 @@ class Config(Generic[R, S, T]):
     path_train: str = ''                                             # path to training data
     _dataset: str = 'FilebasedDataset'                               # name of the dataset class
     _data_loader: str = 'torch.utils.data.DataLoader'                # name of the data loader class
+    sample_seed: int = 42                                            # seed for data sampling
     test_ratio: float = 0.2                                          # ratio of test data
     subset: int|float|None = None                                    # either number or ratio of data files to load
     subset_shuffle: bool = True                                      # randomly select data files
-    subset_seed: int = None                                          # seed for random data file selection
+    subset_seed: int = 42                                            # seed for random data file selection
     
     # model architecture
     hidden_dims: list[int] = field(default_factory=lambda: [])       # hidden dimensions of the model

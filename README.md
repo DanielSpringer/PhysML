@@ -61,24 +61,26 @@
 
 
 ## ML-framework
-Create a new ML-project by deriving classes from the provided base classes and overwrite methods were necessary for customization. It's recommended to put your custom classes in a module-file named after your ML-project in the respective component folders (e.g. `models`, `trainer`, `load_data`, etc.)
+Create a new ML-project by deriving classes from the provided base classes and overwrite methods were necessary for customization. 
+* It is recommended to put your custom classes in a module-file named after your ML-project (`<project_name>.py`) in the respective component folders (`config`, `load_data`, `models`, `trainer` and `wrapper`).
+* In the `__init__.py`-files of the `load_data`-, `models`-, and `wrapper`-module, import everything from your project-specific submodule (`from .<project_name> import *`). This is necessary for the module-loader in the `Config`-class to find your custom classes.
 1. Create a config-JSON in containing required parameters. Add a sub-section with SLURM-settings if you want to run the model via SLURM.
 2. Create a config-class if additional attributes are required. Tip: You can also create the config-class with default parameter-values first and then save it as a config-JSON by calling the `save`-method.
-   - Add a new class to `/phys_ml/config.py`, inheriting from `phys_ml.configs.base.Config`.
+   - Add a new submodule to `/phys_ml/config/`, containing a class inheriting from `phys_ml.configs.Config`.
    - Add additional attributes.
    - For attributes of type `type`, the fully qualified class-name has to be set.
      - For convenience of accessing/importing types from strings, add each attribute as `_<attribute-name>`, add `<attribute-name>_kwargs` to store arguments for later instantiation and add property-getter, -setter and a `get_<attribute-name>`-method which already returns an imported instance of from the provided class-name.
 3. Create a Dataset-class:
-   - Add a new class to `/phys_ml/load_data.py`, inheriting from `phys_ml.load_data.base.FilebasedDataset`, which is based on `torch.utils.data.Dataset`.
+   - Add a new submodule to `/phys_ml/load_data/`, containing a class inheriting from `phys_ml.load_data.FilebasedDataset`, which is based on `torch.utils.data.Dataset`.
    - As usual overwrite the `torch.utils.data.Dataset`-methods where required.
 4. Create a model class:
-   - Add a new class to `/phys_ml/models/models_v2.py`, inheriting from `phys_ml.models.base.BaseModule`.
+   - Add a new submodule to `/phys_ml/models/`, containing a class inheriting from `phys_ml.models.BaseModule`.
    - Overwrite at least the `forward`-method.
 5. Create a wrapper-class if custom behaviour is required:
-   - Add a new class to `/phys_ml/wrapper.py`, inheriting from `phys_ml.wrapper.base.BaseWrapper`.
+   - Add a new submodule to `/phys_ml/wrapper/`, containing a class inheriting from `phys_ml.wrapper.BaseWrapper`.
    - Overwrite methods where custom behaviour is required.
 6. Create a trainer-class if custom behaviour is required:
-   - Add a new class to `/phys_ml/trainer.py`, inheriting from `phys_ml.trainer.base.BaseTrainer`.
+   - Add a new submodule to `/phys_ml/trainer/`, containing a class inheriting from `phys_ml.trainer.BaseTrainer`.
    - Overwrite methods where custom behaviour is required.
 
 ### Usage

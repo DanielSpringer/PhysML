@@ -31,13 +31,16 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         # Subsample files
         file_paths = glob.glob(f"{config.path_train}/*.h5")
         subset = config.subset
-        if subset > 0 and subset is not None:
+        if subset is not None and subset > 0:
             n_files = len(file_paths)
             if type(subset) == float:
                 subset = int(n_files * subset)
-            if subset < n_files and config.subset_shuffle:
-                random.seed(config.subset_seed)
-                file_paths = random.sample(file_paths, max(subset, 1))
+            if subset < n_files:
+                if config.subset_shuffle:
+                    random.seed(config.subset_seed)
+                    file_paths = random.sample(file_paths, max(subset, 1))
+                else:
+                    file_paths = file_paths[:subset]
         
         # Iterate through all files in given directory
         for file_path in file_paths:
@@ -45,18 +48,19 @@ class AutoEncoderVertexDataset(FilebasedDataset):
             vertex = self.load_from_file(file_path)
 
             # sample random indices of a 576^3 matrix and merge all rows through the sampled indices
+            random.seed(config.sample_seed)
             merged_slices, indices = self._sample(vertex, config)
         
             # Append result to data_in
             self.data_in_slices = torch.cat([self.data_in_slices, 
-                                        torch.tensor(merged_slices, dtype=torch.float32)], axis=0)
+                                             torch.tensor(merged_slices, dtype=torch.float32)], axis=0)
             self.data_in_indices = torch.cat([self.data_in_indices, 
-                                        torch.tensor(indices, dtype=torch.float32)], axis=0)
+                                              torch.tensor(indices, dtype=torch.float32)], axis=0)
             assert self.data_in_indices.shape[0] == self.data_in_slices.shape[0]
         
         # Construct target data
         axis = config.construction_axis
-        assert axis <= self.dim, "Axis invalid"
+        assert axis <= self.dim, f"Axis must be in range [1,{self.dim}]"
         idx_range = slice(self.target_length * (self.dim - axis), self.target_length * (self.dim - axis + 1))
         self.data_target = deepcopy(self.data_in_slices[:, idx_range])
         assert list(self.data_target[0]) == list(self.data_in_slices[0][idx_range])
@@ -66,7 +70,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         indices = np.array([[(x // self.length**i) % self.length for i in range(self.dim)] for x in indices])
 
         # Create and merge all row combinations
-        merged_slices = list(self.get_vector_from_vertex(vertex, x, y, z) for x, y, z in indices)
+        merged_slices = [self.get_vector_from_vertex(vertex, x, y, z) for x, y, z in indices]
         return merged_slices, indices
     
     @staticmethod
@@ -118,19 +122,19 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
         indices = np.array([[(x // self.n_freq**i) % self.n_freq for i in range(self.dim)] for x in indices])
 
         # Create and merge all row combinations
-        merged_slices = list(self.get_vector_from_vertex(vertex, *coords) for coords in indices)
+        merged_slices = [self.get_vector_from_vertex(vertex, *coords) for coords in indices]
         return merged_slices, indices
     
     @staticmethod
     def get_vector_from_vertex(vertex: np.ndarray, k1x: int, k1y: int, k2x: int, k2y: int, 
                                k3x: int, k3y: int) -> list[float]:
         return [
-            *vertex[k1x, k1y, k2x, k2y, k3x, :],   # k3y
-            *vertex[k1x, k1y, k2x, k2y, :, k3x],   # k3x
-            *vertex[k1x, k1y, k2x, :, k3x, k3y],   # k2x
-            *vertex[k1x, k1y, :, k2y, k3x, k3y],   # k2y
-            *vertex[k1x, :, k2y, k3x, k3y, k3y],   # k1y
-            *vertex[:, k1y, k2x, k3x, k3y, k3y],   # k1x
+            *vertex[k1x, k1y, k2x, k2y, k3x, :],  # k3y
+            *vertex[k1x, k1y, k2x, k2y, :, k3x],  # k3x
+            *vertex[k1x, k1y, k2x, :, k3x, k3y],  # k2x
+            *vertex[k1x, k1y, :, k2y, k3x, k3y],  # k2y
+            *vertex[k1x, :, k2y, k3x, k3y, k3y],  # k1y
+            *vertex[:, k1y, k2x, k3x, k3y, k3y],  # k1x
         ]
     
     @classmethod

@@ -1,6 +1,5 @@
 import datetime
 import glob
-import importlib
 import json
 import os
 
@@ -90,7 +89,16 @@ class BaseTrainer(Generic[T, S, R]):
         self._train(train_mode)
         self.post_train()
     
-    def predict(self, new_data_path: str, save_path: str|None = None,
+    def prepare_prediciton(self, new_data_path: str, new_data: np.ndarray|None, save_path: str|None = None,
+                           load_model: bool = False) -> torch.Tensor:
+        if new_data is None:
+            new_data = self.dataset.load_from_file(new_data_path)
+        if self.wrapper is None or load_model or save_path:
+            self.load_model(save_path)
+        self.wrapper.model.eval()
+        return new_data
+    
+    def predict(self, new_data_path: str, new_data: np.ndarray|None = None, save_path: str|None = None,
                 load_model: bool = False, **kwargs) -> np.ndarray:
         """
         Performs a prediction using new data. If already trained, uses the trained model, 
@@ -115,10 +123,7 @@ class BaseTrainer(Generic[T, S, R]):
         np.ndarray
             Prediction as numpy array.
         """
-        new_data = self.dataset.load_from_file(new_data_path)
-        if self.wrapper is None or load_model or save_path:
-            self.load_model(save_path)
-        self.wrapper.model.eval()
+        new_data = self.prepare_prediciton(new_data_path, new_data, save_path, load_model)
         return self._predict(new_data, new_data_path, **kwargs)
 
     def pre_train(self) -> None:
@@ -282,17 +287,18 @@ class BaseTrainer(Generic[T, S, R]):
         ''' Set pytorch_lightning Trainer '''
         callbacks = [self.config.get_model_checkpoint(), *self.config.get_callbacks()]
         if train_mode == TrainerModes.SLURM:
-            trainer = Trainer(max_epochs=self.config.epochs, accelerator=self.config.device_type, devices=self.config.devices, 
-                                 num_nodes=self.config.num_nodes, strategy='ddp', logger=logger, callbacks=callbacks)
+            trainer = Trainer(max_epochs=self.config.epochs, accelerator=self.config.device_type, 
+                              devices=self.config.devices, num_nodes=self.config.num_nodes, strategy='ddp', 
+                              logger=logger, callbacks=callbacks)
         elif train_mode == TrainerModes.JUPYTERGPU:
             trainer = Trainer(max_epochs=self.config.epochs, accelerator='gpu', devices=1, strategy='auto', 
-                                 logger=logger, plugins=[LightningEnvironment()], callbacks=callbacks)
+                              logger=logger, plugins=[LightningEnvironment()], callbacks=callbacks)
         elif train_mode == TrainerModes.JUPYTERCPU:
             trainer = Trainer(max_epochs=1, accelerator='cpu', devices=1, strategy='auto', logger=logger, 
-                                 plugins=[LightningEnvironment()], callbacks=callbacks)
+                              plugins=[LightningEnvironment()], callbacks=callbacks)
         elif train_mode == TrainerModes.LOCAL:
-            trainer = Trainer(max_epochs=self.config.epochs, accelerator=self.config.device_type, devices=1, strategy='auto', 
-                                 logger=logger, plugins=[LightningEnvironment()], callbacks=callbacks)
+            trainer = Trainer(max_epochs=self.config.epochs, accelerator=self.config.device_type, devices=1, 
+                              strategy='auto', logger=logger, plugins=[LightningEnvironment()], callbacks=callbacks)
         
         ''' Train '''
         trainer.fit(self.wrapper, train_dataloader, validation_dataloader)
