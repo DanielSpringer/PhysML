@@ -306,6 +306,7 @@ class BaseTrainer(Generic[T, S, R]):
         
         ''' Saving config-file ''' 
         json_object = json.dumps(self.config.as_dict(), indent=4)
+        os.makedirs(self.get_full_save_path(), exist_ok=True)
         with open(self.get_full_save_path() / 'config.json', 'w') as outfile:
             outfile.write(json_object)
         
