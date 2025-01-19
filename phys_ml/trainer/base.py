@@ -304,13 +304,13 @@ class BaseTrainer(Generic[T, S, R]):
             trainer = Trainer(max_epochs=self.config.epochs, accelerator=self.config.device_type, devices=1, 
                               strategy='auto', logger=logger, plugins=[LightningEnvironment()], callbacks=callbacks)
         
-        ''' Train '''
-        trainer.fit(self.wrapper, train_dataloader, validation_dataloader, ckpt_path=ckpt_path)
-        
         ''' Saving config-file ''' 
         json_object = json.dumps(self.config.as_dict(), indent=4)
         with open(self.get_full_save_path() / 'config.json', 'w') as outfile:
             outfile.write(json_object)
+        
+        ''' Train '''
+        trainer.fit(self.wrapper, train_dataloader, validation_dataloader, ckpt_path=ckpt_path)
     
     def _load_npy(self, npy_type: str, save_path: str|None = None, 
                   file_name: str|None = None) -> np.ndarray|None:
