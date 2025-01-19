@@ -87,5 +87,5 @@ class BaseWrapper(L.LightningModule, Generic[S, T]):
         path : str
             File-path of model checkpoint.
         """
-        checkpoint = torch.load(path, map_location='cuda:0')
+        checkpoint = torch.load(path, map_location=self.config.device_type)
         self.model.load_state_dict(checkpoint['state_dict'])
