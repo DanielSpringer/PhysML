@@ -75,4 +75,5 @@ def evaluate_and_report(train_results: dict[str, Any], test_filename: str, targe
     
     results, target_slice = evaluate_all_models(train_results, test_filename, target, slice_at, axis, 
                                                 predict_func, **kwargs)
+    print(f"\nRESULTS:\n   {'\n   '.join([f'latent_dim={k}: RMSE={v[0]:.4f}' for k, v in results.items()])}")
     report_results(results, target_slice, slice_at, axis, nrows, ncols)
