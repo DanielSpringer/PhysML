@@ -29,15 +29,16 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
     
     def _predict_sample(self, vertex: torch.Tensor, coord: list[int], 
                         encode_only: bool = False) -> np.ndarray:
+        device = self.get_device_from_accelerator(self.config.device_type)
         full_input = torch.tensor(self.dataset.get_vector_from_vertex(vertex, *coord),
-                                  dtype=torch.float32).to('cpu')
+                                  dtype=torch.float32).to(device)
         if self.config.positional_encoding:
-            pos = torch.tensor(coord, dtype=torch.float32).to('cpu')
+            pos = torch.tensor(coord, dtype=torch.float32).to(device)
             full_input = (pos.unsqueeze(0), full_input.unsqueeze(0))
         if encode_only:
-            pred = self.wrapper.model.encode(full_input).detach().numpy()
+            pred = self.wrapper.model.encode(full_input).detach().cpu().numpy()
         else:
-            pred = self.wrapper(full_input).detach().numpy()
+            pred = self.wrapper(full_input).detach().cpu().numpy()
         del full_input
         return pred
     
@@ -221,3 +222,11 @@ class VertexTrainer24x6(VertexTrainer):
         subfolder = 'latentspace_slices' if encode_only else 'prediction_slices'
         self._save_prediction(result, filename, subfolder)
         return result
+
+    def load_latentspace_slice(self, save_path: str|None = None, 
+                               file_name: str|None = None) -> np.ndarray|None:
+        return self._load_npy('latentspace_slices', save_path, file_name)
+
+    def load_prediction_slice(self, save_path: str|None = None, 
+                              file_name: str|None = None) -> np.ndarray|None:
+        return self._load_npy('prediction_slices', save_path, file_name)

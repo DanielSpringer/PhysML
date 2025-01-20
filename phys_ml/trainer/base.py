@@ -93,8 +93,10 @@ class BaseTrainer(Generic[T, S, R]):
                            load_model: bool = False) -> torch.Tensor:
         if new_data is None:
             new_data = self.dataset.load_from_file(new_data_path)
-        if self.wrapper is None or load_model or save_path:
-            self.load_model(save_path)
+        if load_model or save_path:
+            ckpt_path = self.load_model(save_path)
+            self.wrapper = self.config.model_wrapper.load_from_checkpoint(ckpt_path, config=self.config, 
+                                                                          in_dim=self.input_size)
         self.wrapper.model.eval()
         return new_data
     
@@ -186,7 +188,8 @@ class BaseTrainer(Generic[T, S, R]):
         np.ndarray
             Prediction as numpy array.
         """
-        input = torch.tensor(new_data, dtype=torch.float32).to('cpu')
+        device = self.get_device_from_accelerator(self.config.device_type)
+        input = torch.tensor(new_data, dtype=torch.float32).to(device)
         pred = self.wrapper(input).detach().numpy()
         p = self.get_full_save_path() / 'predictions'
         p.mkdir(exist_ok=True)
@@ -282,7 +285,6 @@ class BaseTrainer(Generic[T, S, R]):
         if self.config.resume == True:
             ''' Model loading from checkpoint file '''
             ckpt_path = self.load_model()
-            print(" >>> Loaded checkpoint")
         self.wrapper = self.config.model_wrapper(self.config, self.input_size)
 
         ''' Logging and checkpoint saving '''
@@ -323,7 +325,7 @@ class BaseTrainer(Generic[T, S, R]):
         npy_type : str
             Name of subfolder in the model-save-folder where the numpy-files are stored.
         save_path : str | None, optional
-            Path to the model-save-folder (like `/<project_name>/<version>/`).\n
+            Path relative to `<saves_dir>/<project_name>/`.
             Required if no model loaded.\n
             If `None` `self.config.save_path` is used. (defaults to None)
         file_name : str | None, optional
