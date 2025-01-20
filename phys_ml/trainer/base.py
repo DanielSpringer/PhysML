@@ -325,7 +325,7 @@ class BaseTrainer(Generic[T, S, R]):
         npy_type : str
             Name of subfolder in the model-save-folder where the numpy-files are stored.
         save_path : str | None, optional
-            Path to the model-save-folder (like `/<project_name>/<version>/`).\n
+            Path relative to `<saves_dir>/<project_name>/`.
             Required if no model loaded.\n
             If `None` `self.config.save_path` is used. (defaults to None)
         file_name : str | None, optional
