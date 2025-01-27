@@ -10,10 +10,10 @@ class AutoEncoderVertex(BaseModule[VertexConfig]):
         super().__init__(config, in_dim)
         self.matrix_dim = config.matrix_dim
         if config.positional_encoding:
-            self.in_dim += self.matrix_dim
+            in_dim += self.matrix_dim
         
         self.embedding = nn.Sequential(
-            nn.Linear(self.in_dim, config.hidden_dims[0])
+            nn.Linear(in_dim, config.hidden_dims[0])
         )
 
         encoder_layers = [m for i in range(len(config.hidden_dims) - 1) for m in 
@@ -32,7 +32,7 @@ class AutoEncoderVertex(BaseModule[VertexConfig]):
     
     def encode(self, data_in) -> torch.Tensor:
         if self.config.positional_encoding:
-            idcs = data_in[0] // (self.in_dim / self.matrix_dim)
+            idcs = data_in[0] / self.in_dim
             x = self.embedding(torch.cat([idcs, data_in[1]], axis=1))
         else:
             x = self.embedding(data_in)
