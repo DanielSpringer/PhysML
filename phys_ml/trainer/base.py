@@ -283,20 +283,26 @@ class BaseTrainer(Generic[T, S, R]):
         if path is None:
             if best_model_path:= self.trainer.checkpoint_callback.best_model_path:
                 return best_model_path
-        elif path != CKPT_TYPE.LAST and not path.endswith('.ckpt'):
+        elif not path.endswith('.ckpt'):
             CKPT_DIRNAME = 'checkpoints'
-            if path == CKPT_TYPE.BEST:
+            if path == CKPT_TYPE.BEST or path == CKPT_TYPE.LAST:
                 ckpt_dir = self.get_full_save_path() / CKPT_DIRNAME
             elif CKPT_DIRNAME not in path:
                 ckpt_dir = Path(path) / CKPT_DIRNAME
+            
             if self.trainer:
                 last_name = self.trainer.checkpoint_callback.CHECKPOINT_NAME_LAST
             else:
                 last_name = self.config.get_model_checkpoint().CHECKPOINT_NAME_LAST
-            ckpt_paths = glob.glob((ckpt_dir / '*.ckpt').as_posix())
-            for path in reversed(ckpt_paths):
-                if not path.endswith(f'{last_name}.ckpt'):
-                    return path
+            last_name = f'{last_name}.ckpt'
+
+            if path == CKPT_TYPE.LAST:
+                return ckpt_dir / last_name
+            else:
+                ckpt_paths = glob.glob((ckpt_dir / '*.ckpt').as_posix())
+                for path in reversed(ckpt_paths):
+                    if not path.endswith(f'{last_name}.ckpt'):
+                        return path
         else:
             return path
 
