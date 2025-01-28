@@ -11,12 +11,16 @@ from . import BaseTrainer, CKPT_TYPE, TrainerModes
 
 
 class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWrapper]):
+    def __init__(self, project_name: str, config_name: str | None = None, 
+                 subconfig_name: str|None = None, load_from: str|None = None, config_dir: str = 'configs', 
+                 config_kwargs: dict[str, Any] = {}):
+        super().__init__(project_name, config_name, subconfig_name, load_from, config_dir, 
+                         config_kwargs)
+        torch.set_float32_matmul_precision('high')
+    
     @property
     def input_size(self) -> int:
         return self.dataset[0][1].shape[0]
-    
-    def pre_train(self) -> None:
-        torch.set_float32_matmul_precision('high')
     
     def predict(self, vertex_path: str, new_vertex: np.ndarray|None = None, train_mode: TrainerModes|None = None, 
                 load_from: Literal['best', 'last']|str|None = None, encode_only: bool = False):
@@ -27,13 +31,13 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
                                       pin_memory=True)
 
         # predict
-        if load_from == CKPT_TYPE.BEST.value:
-            load_from = self.get_best_model_ckpt()
-        self.init_trainer(train_mode, load_from)
+        if load_from:
+            ckpt_path = self.get_model_ckpt(load_from)
+            self.init_trainer(train_mode, Path(ckpt_path).parents[2])
         pred_vertex = self.prepare_prediction_matrix(dataset.dim, encode_only, 
                                                      replace_at=self.config.construction_axis-1)
         self.wrapper.set_predictor(pred_vertex, encode_only)
-        self.trainer.predict(self.wrapper, dataloader, return_predictions=False, ckpt_path=load_from)
+        self.trainer.predict(self.wrapper, dataloader, return_predictions=False, ckpt_path=ckpt_path)
         
         # save results to disk
         pred_vertex = self.wrapper.pred_vertex.cpu().numpy()
@@ -43,7 +47,7 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
     
     def prepare_prediction_matrix(self, out_dim: int, encode_only: bool = False, 
                                    replace_at: int|None = None) -> torch.Tensor:
-        device = self.get_device_from_accelerator(self.config.device_type)
+        #device = self.get_device_from_accelerator(self.config.device_type)
         if encode_only:
             assert replace_at is not None, "If `encode_only` is True, `insert_at` must be provided."
             shape = [self.dataset.length] * out_dim
@@ -51,7 +55,7 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
             pred_vertex = np.zeros(tuple(shape))
         else:
             pred_vertex = np.zeros((self.dataset.length,) * out_dim)
-        return torch.tensor(pred_vertex, dtype=torch.float32).to(device)
+        return torch.tensor(pred_vertex, dtype=torch.float32)#.to(device)
     
     def load_latentspace(self, save_path: str|None = None, 
                          file_name: str|None = None) -> np.ndarray|None:
@@ -97,13 +101,13 @@ class VertexTrainer24x6(VertexTrainer, BaseTrainer[Vertex24x6Config, AutoEncoder
                                       persistent_workers=False)
 
         # predict
-        if load_from == CKPT_TYPE.BEST.value:
-            load_from = self.get_best_model_ckpt()
-        self.init_trainer(train_mode, load_from)
+        if load_from:
+            ckpt_path = self.get_model_ckpt(load_from)
+            self.init_trainer(train_mode, Path(ckpt_path).parents[2])
         replace_at = dataset.replace_at
         pred_vertex = self.prepare_prediction_matrix(dim, encode_only, replace_at)
         self.wrapper.set_predictor(pred_vertex, encode_only, replace_at)
-        self.trainer.predict(self.wrapper, dataloader, return_predictions=False, ckpt_path=load_from)
+        self.trainer.predict(self.wrapper, dataloader, return_predictions=False, ckpt_path=ckpt_path)
         
         # save results to disk
         pred_vertex = self.wrapper.pred_vertex.cpu().numpy()

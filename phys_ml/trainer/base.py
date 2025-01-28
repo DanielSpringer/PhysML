@@ -112,10 +112,8 @@ class BaseTrainer(Generic[T, S, R]):
         resume_from : Literal['last', 'best'] | str | None, optional
             Resume training from the last or best checkpoint or from a specific path. (defaults to None)
         """
-        if ckpt_path := resume_from or self.config.resume:
-            if ckpt_path == CKPT_TYPE.BEST:
-                ckpt_path = self.get_best_model_ckpt()
-        self.init_trainer(train_mode, ckpt_path)
+        ckpt_path = self.get_model_ckpt(resume_from or self.config.resume)
+        self.init_trainer(train_mode, Path(ckpt_path).parents[2])
         self.pre_train()
         self._train(ckpt_path)
         self.post_train()
@@ -157,11 +155,10 @@ class BaseTrainer(Generic[T, S, R]):
         """
         pass
 
-    def predict(self, new_data_path: str, new_data: np.ndarray|None = None, train_mode: TrainerModes|None = None, 
+    def predict(self, new_data_path: str, new_data: np.ndarray|None = None, 
                 load_from: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None = None) -> np.ndarray:
         """
-        Performs a prediction using new data. If already trained, uses the trained model, 
-        otherwise loads a model from disk.
+        Performs a prediction using new data.
 
         Parameters
         ----------
@@ -171,7 +168,8 @@ class BaseTrainer(Generic[T, S, R]):
             New data to predict on. 
             If `None` load data from `new_data_path`. (defaults to None)
         load_from : Literal['last', 'best'] | str | None, optional
-            Load model from the last or best checkpoint or from a specific path. (defaults to None)
+            Load model from the last or best checkpoint or from a specific path. 
+            If `None` uses an already loaded model. (defaults to None)
 
         Returns
         -------
@@ -180,8 +178,8 @@ class BaseTrainer(Generic[T, S, R]):
         """
         if new_data is None:
             new_data = self.dataset.load_from_file(new_data_path)
-        if load_from == CKPT_TYPE.BEST.value:
-            ckpt_path = self.get_best_model_ckpt()
+        if load_from:
+            ckpt_path = self.get_model_ckpt(load_from)
             self.wrapper = self.config.model_wrapper.load_from_checkpoint(ckpt_path, config=self.config, 
                                                                           in_dim=self.input_size)
         self.wrapper.model.eval()
@@ -217,6 +215,7 @@ class BaseTrainer(Generic[T, S, R]):
         Set TensorBoardLogger and ModelCheckpoint.\n
         Overwrite for custom logging.
         """
+        save_path = save_path or self.config.save_path
         if save_path:
             run_path = Path(save_path).parent.name
             version = int(Path(save_path).name.split('_')[-1])
@@ -270,7 +269,7 @@ class BaseTrainer(Generic[T, S, R]):
             pref = self.config.base_dir / self.config.save_dir
         return pref / self.project_name / save_path
     
-    def get_best_model_ckpt(self) -> str:
+    def get_model_ckpt(self, path: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None = None) -> str:
         """
         Gets the best or latest model checkpoint.
         If trainer not fitted, gets the checkpoint with the highest epoch from the saved checkpoints.
@@ -281,12 +280,21 @@ class BaseTrainer(Generic[T, S, R]):
         str
             Path to the best or latest model checkpoint.
         """
-        if path:= self.trainer.checkpoint_callback.best_model_path:
+        if path is None:
+            if best_model_path:= self.trainer.checkpoint_callback.best_model_path:
+                return best_model_path
+        elif path != CKPT_TYPE.LAST and not path.endswith('.ckpt'):
+            CKPT_DIRNAME = 'checkpoints'
+            if path == CKPT_TYPE.BEST:
+                ckpt_dir = self.get_full_save_path() / CKPT_DIRNAME
+            elif CKPT_DIRNAME not in path:
+                ckpt_dir = Path(path) / CKPT_DIRNAME
+            ckpt_paths = glob.glob((ckpt_dir / '*.ckpt').as_posix())
+            for path in reversed(ckpt_paths):
+                if not path.endswith(f'{self.trainer.checkpoint_callback.CHECKPOINT_NAME_LAST}.ckpt'):
+                    return path
+        else:
             return path
-        ckpt_paths = glob.glob((self.get_full_save_path() / 'checkpoints' / '*.ckpt').as_posix())
-        for path in reversed(ckpt_paths):
-            if not path.endswith(f'{self.trainer.checkpoint_callback.CHECKPOINT_NAME_LAST}.ckpt'):
-                return path
 
     def load_config_from_saves(self, save_path: str, **kwargs) -> None:
         """
