@@ -289,9 +289,13 @@ class BaseTrainer(Generic[T, S, R]):
                 ckpt_dir = self.get_full_save_path() / CKPT_DIRNAME
             elif CKPT_DIRNAME not in path:
                 ckpt_dir = Path(path) / CKPT_DIRNAME
+            if self.trainer:
+                last_name = self.trainer.checkpoint_callback.CHECKPOINT_NAME_LAST
+            else:
+                last_name = self.config.get_model_checkpoint().CHECKPOINT_NAME_LAST
             ckpt_paths = glob.glob((ckpt_dir / '*.ckpt').as_posix())
             for path in reversed(ckpt_paths):
-                if not path.endswith(f'{self.trainer.checkpoint_callback.CHECKPOINT_NAME_LAST}.ckpt'):
+                if not path.endswith(f'{last_name}.ckpt'):
                     return path
         else:
             return path
