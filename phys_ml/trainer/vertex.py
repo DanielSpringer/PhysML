@@ -29,7 +29,7 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
         # predict
         if load_from == CKPT_TYPE.BEST.value:
             load_from = self.get_best_model_ckpt()
-        self.trainer = self.init_trainer(train_mode, load_from)
+        self.init_trainer(train_mode, load_from)
         pred_vertex = self.prepare_prediction_matrix(dataset.dim, encode_only, 
                                                      replace_at=self.config.construction_axis-1)
         self.wrapper.set_predictor(pred_vertex, encode_only)
@@ -99,7 +99,7 @@ class VertexTrainer24x6(VertexTrainer, BaseTrainer[Vertex24x6Config, AutoEncoder
         # predict
         if load_from == CKPT_TYPE.BEST.value:
             load_from = self.get_best_model_ckpt()
-        self.trainer = self.init_trainer(train_mode, load_from)
+        self.init_trainer(train_mode, load_from)
         replace_at = dataset.replace_at
         pred_vertex = self.prepare_prediction_matrix(dim, encode_only, replace_at)
         self.wrapper.set_predictor(pred_vertex, encode_only, replace_at)
