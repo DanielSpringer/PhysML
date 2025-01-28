@@ -14,13 +14,15 @@ from ..trainer import TrainerModes
 from ..trainer.vertex import VertexTrainer
 
 
-def evaluate_prediction(save_path: str, test_filename: str, target: np.ndarray, target_slice: np.ndarray,
+def evaluate_prediction(save_path: str, test_filename: str, trainer: VertexTrainer, target: np.ndarray, 
+                        hidden_dims: list[int], target_slice: np.ndarray, 
                         predict_func: Callable[...,np.ndarray]|None = None, 
                         load_func: Callable[...,np.ndarray]|None = None, 
                         slice_at: int|tuple[int,...]|None = None, axis: int|None = None, 
                         **kwargs) -> tuple[float, np.ndarray, np.ndarray]:
     assert predict_func is not None or pred is not None, 'Either `predict_func` or `pred` must be provided.'
     if load_func is None:
+        trainer.config.hidden_dims = hidden_dims
         pred = predict_func(test_filename, new_vertex=target, train_mode=TrainerModes.JUPYTER, 
                             load_from=save_path, **kwargs)
     else:
@@ -39,15 +41,15 @@ def evaluate_prediction(save_path: str, test_filename: str, target: np.ndarray, 
     return rmse, eigvec, pred_slice
 
 
-def evaluate_all_models(train_results: list[dict[str, Any]], test_filename: str, target: np.ndarray, 
-                        slice_at: int|tuple[int,...]|None, axis: int, 
+def evaluate_all_models(train_results: list[dict[str, Any]], test_filename: str, trainer: VertexTrainer, 
+                        target: np.ndarray, slice_at: int|tuple[int,...]|None, axis: int, 
                         predict_func: Callable[...,np.ndarray]|None = None, 
                         load_func: Callable[...,np.ndarray]|None = None, 
                         **kwargs) -> tuple[dict[int, tuple[float, np.ndarray, np.ndarray]], np.ndarray]:
     target_slice = vertvis.get_mat_slice(target, axis, slice_at)
     results = {mod_info['latent_dim']: 
-               evaluate_prediction(mod_info['save_path'], test_filename, target, target_slice, 
-                                   predict_func, load_func, slice_at, axis, **kwargs)
+               evaluate_prediction(mod_info['save_path'], test_filename, trainer, target, mod_info['hidden_dims'], 
+                                   target_slice, predict_func, load_func, slice_at, axis, **kwargs)
                for mod_info in train_results}
     return results, target_slice
 
@@ -94,15 +96,15 @@ def report_results(results: dict[int, tuple[float, np.ndarray, np.ndarray]], tar
                              xlabel='k', xticks=[])
 
 
-def evaluate_and_report(train_results: dict[str, Any], test_filename: str, target: np.ndarray, 
-                        slice_at: int|tuple[int,...]|None, axis: int, nrows:int, ncols: int,
-                        predict_func: Callable[...,np.ndarray]|None = None, 
+def evaluate_and_report(train_results: dict[str, Any], test_filename: str, trainer: VertexTrainer, 
+                        target: np.ndarray, slice_at: int|tuple[int,...]|None, axis: int, 
+                        nrows:int, ncols: int, predict_func: Callable[...,np.ndarray]|None = None, 
                         load_func: Callable[...,np.ndarray]|None = None, 
                         **kwargs):
     assert nrows * ncols >= len(train_results) + 1, \
         f"`{nrows=}`and `{ncols=}` not enough for {len(train_results + 1)} items to plot in `train_info` + target."
     
-    results, target_slice = evaluate_all_models(train_results, test_filename, target, slice_at, axis, 
+    results, target_slice = evaluate_all_models(train_results, test_filename, trainer, target, slice_at, axis, 
                                                 predict_func, load_func, **kwargs)
     report_results(results, target_slice, slice_at, axis, nrows, ncols)
 

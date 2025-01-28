@@ -113,7 +113,7 @@ class BaseTrainer(Generic[T, S, R]):
             Resume training from the last or best checkpoint or from a specific path. (defaults to None)
         """
         ckpt_path = self.get_model_ckpt(resume_from or self.config.resume)
-        self.init_trainer(train_mode, Path(ckpt_path).parents[2])
+        self.init_trainer(train_mode, Path(ckpt_path).parents[1])
         self.pre_train()
         self._train(ckpt_path)
         self.post_train()
