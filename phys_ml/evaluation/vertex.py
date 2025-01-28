@@ -20,7 +20,8 @@ def evaluate_prediction(save_path: str, test_filename: str, trainer: VertexTrain
                         load_func: Callable[...,np.ndarray]|None = None, 
                         slice_at: int|tuple[int,...]|None = None, axis: int|None = None, 
                         **kwargs) -> tuple[float, np.ndarray, np.ndarray]:
-    assert predict_func is not None or pred is not None, 'Either `predict_func` or `pred` must be provided.'
+    assert predict_func is not None or load_func is not None, \
+        'Either `predict_func` or `load_func` must be provided.'
     if load_func is None:
         trainer.config.hidden_dims = hidden_dims
         pred = predict_func(test_filename, new_vertex=target, train_mode=TrainerModes.JUPYTER, 

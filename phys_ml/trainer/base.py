@@ -3,7 +3,7 @@ import glob
 import json
 import os
 
-from enum import Enum, StrEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import Any, Generic, Literal, TypeVar
 
@@ -25,7 +25,7 @@ S = TypeVar('S', bound=FilebasedDataset)
 T = TypeVar('T', bound=config.Config)
 
 
-class TrainerModes(Enum):
+class TrainerModes(IntEnum):
     SLURM = 1
     JUPYTER = 2
 
@@ -201,7 +201,8 @@ class BaseTrainer(Generic[T, S, R]):
         if train_mode == TrainerModes.SLURM:
             self.trainer = Trainer(num_nodes=self.config.num_nodes, strategy='ddp', **trainer_kwargs)
         elif train_mode == TrainerModes.JUPYTER:
-            strategy = 'ddp_notebook' if os.name == 'posix' else 'auto'
+            if strategy := self.config.strategy:
+                strategy = 'ddp_notebook' if os.name == 'posix' else 'auto'
             self.trainer = Trainer(strategy=strategy, plugins=[LightningEnvironment()], **trainer_kwargs)
     
     def save_prediction(self, vertex_prediction: np.ndarray, filename: str, subfolder: str):

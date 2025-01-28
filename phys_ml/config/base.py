@@ -44,6 +44,7 @@ class Config(Generic[R, S, T]):
     out_dim: int = 128                                               # output dimension of the model
 
     # training
+    strategy: str|None = None                                        # training strategy for pytorch lightning trainer
     batch_size: int = 20                                             # batch size
     learning_rate: float = 0.0001                                    # learning rate
     weight_decay: float = 1e-05                                      # weight decay
