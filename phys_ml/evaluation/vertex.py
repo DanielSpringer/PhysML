@@ -28,6 +28,8 @@ def evaluate_prediction(save_path: str, test_filename: str, trainer: VertexTrain
                             load_from=save_path, **kwargs)
     else:
         pred = load_func(save_path)
+    if len(target.shape) == 3:
+        pred = trainer.dataset.to_3d_vertex(pred)
     dim = len(pred.shape)
     if dim in [3, 6]:
         pred_slice = vertvis.get_mat_slice(pred, axis, slice_at)
