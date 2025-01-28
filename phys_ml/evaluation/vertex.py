@@ -21,7 +21,8 @@ def evaluate_prediction(save_path: str, test_filename: str, target: np.ndarray, 
                         **kwargs) -> tuple[float, np.ndarray, np.ndarray]:
     assert predict_func is not None or pred is not None, 'Either `predict_func` or `pred` must be provided.'
     if load_func is None:
-        pred = predict_func(test_filename, new_vertex=target, save_path=save_path, **kwargs)
+        pred = predict_func(test_filename, new_vertex=target, train_mode=TrainerModes.JUPYTER, 
+                            load_from=save_path, **kwargs)
     else:
         pred = load_func(save_path)
     dim = len(pred.shape)
@@ -136,7 +137,7 @@ def eval_train(trainer: VertexTrainer, info_dict: list[dict[str, Any]], info_fil
         trainer.config.save_path = path
 
     trainer.config.hidden_dims = hidden_dims
-    trainer.train(train_mode=TrainerModes.JUPYTERGPU)
+    trainer.train(train_mode=TrainerModes.JUPYTER)
 
     if info_dict is None:
         info_dict = load_info_dict(info_filename)

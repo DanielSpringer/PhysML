@@ -38,9 +38,8 @@ class CKPT_TYPE(StrEnum):
 class BaseTrainer(Generic[T, S, R]):
     config_cls: type[T] = T.__bound__
 
-    def __init__(self, project_name: str, train_mode: TrainerModes, config_name: str | None = None, 
-                 subconfig_name: str|None = None, load_from: str|None = None, config_dir: str = 'configs', 
-                 config_kwargs: dict[str, Any] = {}):
+    def __init__(self, project_name: str, config_name: str | None = None, subconfig_name: str|None = None, 
+                 load_from: str|None = None, config_dir: str = 'configs', config_kwargs: dict[str, Any] = {}):
         """
         Main class for training and using a model.
 
@@ -82,21 +81,10 @@ class BaseTrainer(Generic[T, S, R]):
             if self.config.save_path:
                 load_from = self.config.save_path
         self.dataset: S = self.config.dataset(self.config)
-        self.wrapper: R = self.config.model_wrapper(self.config, self.input_size)
         self.data_loader: type[DataLoader] = self.config.data_loader
 
-        ''' Logging and checkpoint saving '''
-        logger = self.set_logging(load_from)
-
-        ''' Set pytorch_lightning Trainer '''
-        callbacks = [self.config.get_model_checkpoint(), *self.config.get_callbacks()]
-        trainer_kwargs = {'max_epochs': self.config.epochs, 'accelerator': self.config.device_type, 
-                          'devices': self.config.devices, 'logger': logger, 'callbacks': callbacks}
-        if train_mode == TrainerModes.SLURM:
-            self.trainer = Trainer(num_nodes=self.config.num_nodes, strategy='ddp', **trainer_kwargs)
-        elif train_mode == TrainerModes.JUPYTER:
-            strategy = 'ddp_notebook' if os.name == 'posix' else 'auto'
-            self.trainer = Trainer(strategy=strategy, plugins=[LightningEnvironment()], **trainer_kwargs)
+        self.wrapper: R = None
+        self.trainer: Trainer = None
     
     @property
     def input_size(self) -> int|np.ndarray:
@@ -114,7 +102,8 @@ class BaseTrainer(Generic[T, S, R]):
         """
         return f"save_{self.subconfig_name}_BS{self.config.batch_size}_"
 
-    def train(self, resume_from: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None = None) -> None:
+    def train(self, train_mode: TrainerModes, 
+              resume_from: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None = None) -> None:
         """
         Main method to train the model.
 
@@ -123,11 +112,15 @@ class BaseTrainer(Generic[T, S, R]):
         resume_from : Literal['last', 'best'] | str | None, optional
             Resume training from the last or best checkpoint or from a specific path. (defaults to None)
         """
+        if ckpt_path := resume_from or self.config.resume:
+            if ckpt_path == CKPT_TYPE.BEST:
+                ckpt_path = self.get_best_model_ckpt()
+        self.init_trainer(train_mode, ckpt_path)
         self.pre_train()
-        self._train(resume_from)
+        self._train(ckpt_path)
         self.post_train()
     
-    def _train(self, resume_from: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None = None) -> None:
+    def _train(self, ckpt_path: str|None = None) -> None:
         """
         Core method for running the training.\n
         Overwrite for custom training process.
@@ -150,9 +143,6 @@ class BaseTrainer(Generic[T, S, R]):
             outfile.write(json_object)
         
         ''' Train '''
-        if ckpt_path := resume_from or self.config.resume:
-            if ckpt_path == CKPT_TYPE.BEST:
-                ckpt_path = self.get_best_model_ckpt()
         self.trainer.fit(self.wrapper, train_dataloader, validation_dataloader, ckpt_path=ckpt_path)
     
     def pre_train(self) -> None:
@@ -167,7 +157,7 @@ class BaseTrainer(Generic[T, S, R]):
         """
         pass
 
-    def predict(self, new_data_path: str, new_data: np.ndarray|None = None, 
+    def predict(self, new_data_path: str, new_data: np.ndarray|None = None, train_mode: TrainerModes|None = None, 
                 load_from: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None = None) -> np.ndarray:
         """
         Performs a prediction using new data. If already trained, uses the trained model, 
@@ -200,6 +190,21 @@ class BaseTrainer(Generic[T, S, R]):
         pred = self.wrapper(input).detach().numpy()
         self.save_prediction(pred, Path(new_data_path).stem, 'predictions')
         return pred
+    
+    def init_trainer(self, train_mode: TrainerModes, load_from: str|None = None) -> None:
+        self.wrapper = self.config.model_wrapper(self.config, self.input_size)
+        ''' Logging and checkpoint saving '''
+        logger = self.set_logging(load_from)
+
+        ''' Set pytorch_lightning Trainer '''
+        callbacks = [self.config.get_model_checkpoint(), *self.config.get_callbacks()]
+        trainer_kwargs = {'max_epochs': self.config.epochs, 'accelerator': self.config.device_type, 
+                          'devices': self.config.devices, 'logger': logger, 'callbacks': callbacks}
+        if train_mode == TrainerModes.SLURM:
+            self.trainer = Trainer(num_nodes=self.config.num_nodes, strategy='ddp', **trainer_kwargs)
+        elif train_mode == TrainerModes.JUPYTER:
+            strategy = 'ddp_notebook' if os.name == 'posix' else 'auto'
+            self.trainer = Trainer(strategy=strategy, plugins=[LightningEnvironment()], **trainer_kwargs)
     
     def save_prediction(self, vertex_prediction: np.ndarray, filename: str, subfolder: str):
         p = self.get_full_save_path() / subfolder
