@@ -163,3 +163,17 @@ def lineplot(x_list: Iterable[Iterable], y_list: Iterable[Iterable], labels: lis
         plt.plot(x, y, color=color_cycle[i], label=labels[i] if labels else None)
     _set_lineplot(bool(labels), title, lim, xlabel, ylabel, xticks)
     plt.show()
+
+
+def plot_correlation(cor_mat: np.ndarray, title: str):
+    # Create the heatmap
+    plt.figure(figsize=(6, 5))
+    plt.imshow(cor_mat, extent=[0, 0.5, 0, 0.5], cmap='coolwarm', interpolation='nearest', origin="lower")
+    plt.colorbar(label='Correlation Coefficient')
+
+    # Add labels
+    plt.title(title)
+    plt.xlabel('tp')
+    plt.ylabel('tp')
+    plt.tight_layout()
+    plt.show()

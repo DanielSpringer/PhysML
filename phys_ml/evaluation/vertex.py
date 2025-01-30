@@ -1,17 +1,67 @@
+import asyncio
+import nest_asyncio
 import glob
 import os
 import pickle
+
+import numpy as np
 
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import numpy as np
+from tqdm.notebook import tqdm
 
 from .. import metrics
 from ..visualization import vertex_visualization as vertvis
 from ..trainer import TrainerModes
 from ..trainer.vertex import VertexTrainer
+
+
+def background(f):
+    def wrapped(*args, **kwargs):
+        return asyncio.get_event_loop().run_in_executor(None, f, *args, **kwargs)
+    return wrapped
+
+
+@background
+def process_vertex(cor_mat: np.ndarray, i: int, fp2_idcs: list[list[int]], 
+                   paths_or_vertices: list[str]|list[np.ndarray], pre_load_vertices: bool = False):
+    cor_mat[i, i] = 1
+    if pre_load_vertices:
+        vertex1 = paths_or_vertices[i]
+    else:
+        vertex1 = vertvis.AutoEncoderVertexDataset.load_from_file(paths_or_vertices[i])
+    for j in tqdm(fp2_idcs[i]):
+        if pre_load_vertices:
+            vertex2 = paths_or_vertices[j]
+        else:
+            vertex2 = vertvis.AutoEncoderVertexDataset.load_from_file(paths_or_vertices[j])
+        cor_mat[i, j] = cor_mat[j, i] = (np.sum(vertex1 * vertex2) / 
+                                            (np.linalg.norm(vertex1) * np.linalg.norm(vertex2)))
+    del vertex1
+
+
+def vertex_correlation(vertex_dir: str, pre_load_vertices: bool = False, 
+                       save_suffix: str = '') -> np.ndarray:
+    """ pre_load_vertices: Load all vertices into memory. Requires ca. 80 GB of memory for all 51 vertices."""
+    nest_asyncio.apply()
+    paths_or_vertices = sorted(glob.glob(os.path.join(vertex_dir, '*.h5')))
+    if pre_load_vertices:
+        paths_or_vertices = [vertvis.AutoEncoderVertexDataset.load_from_file(fp) 
+                             for fp in tqdm(paths_or_vertices, desc='load files')]
+    s = len(paths_or_vertices)
+    cor_mat = np.empty((s, s))
+    fp2_idcs = [range(i, s) for i in range(1, s + 1)]
+    loop = asyncio.get_event_loop()
+    looper = asyncio.gather(*[process_vertex(cor_mat, i, fp2_idcs, paths_or_vertices, pre_load_vertices) 
+                              for i in range(s)])
+    loop.run_until_complete(looper)
+
+    # save result
+    fname = '_'.join('cor_mat_vertex24x6', save_suffix)
+    np.save(f'{fname}.npy', cor_mat)
+    return cor_mat
 
 
 def evaluate_prediction(save_path: str, test_filename: str, trainer: VertexTrainer, target: np.ndarray, 
@@ -76,7 +126,7 @@ def report_results(results: dict[int, tuple[float, np.ndarray, np.ndarray]], tar
             slice_k = (set(range(1,4)) - set(axis)).pop()
             params_str = f'$k_{slice_k}={slice_at[0] * 24 + slice_at[1]}$'
         elif isinstance(axis, int):
-            other_ks = set(range(1,4)) - {axis}
+            other_ks = set(range(1,4)) - {(axis + 1) // 2}
             params_str = ', '.join([f'$k_{{{k}_{c}}}={sl}$' 
                                     for (k, c), sl in zip([(k, c) for k in other_ks for c in ['x', 'y']], slice_at)])
     plot_data = {'target': target_slice}
