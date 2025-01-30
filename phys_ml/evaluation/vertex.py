@@ -42,9 +42,9 @@ def process_vertex(cor_mat: np.ndarray, i: int, fp2_idcs: list[list[int]],
     del vertex1
 
 
-def vertex_correlation(vertex_dir: str, pre_load_vertices: bool = False, 
+def vertex_correlation(vertex_dir: str, n_workers: int = -1, pre_load_vertices: bool = False, 
                        save_suffix: str = '') -> np.ndarray:
-    """ pre_load_vertices: Load all vertices into memory. Requires ca. 80 GB of memory for all 51 vertices."""
+    """ pre_load_vertices: Load all vertices into memory. Requires ca. 100 GB of memory for all 51 vertices."""
     nest_asyncio.apply()
     paths_or_vertices = sorted(glob.glob(os.path.join(vertex_dir, '*.h5')))
     if pre_load_vertices:
@@ -53,13 +53,16 @@ def vertex_correlation(vertex_dir: str, pre_load_vertices: bool = False,
     s = len(paths_or_vertices)
     cor_mat = np.empty((s, s))
     fp2_idcs = [range(i, s) for i in range(1, s + 1)]
-    loop = asyncio.get_event_loop()
-    looper = asyncio.gather(*[process_vertex(cor_mat, i, fp2_idcs, paths_or_vertices, pre_load_vertices) 
-                              for i in range(s)])
-    loop.run_until_complete(looper)
+    idx_ranges = ([range(s)] if n_workers == -1 
+                  else [range(*(i, min(i + n_workers, s))) for i in range(0, s, n_workers)])
+    for r in idx_ranges:
+        loop = asyncio.get_event_loop()
+        looper = asyncio.gather(*[process_vertex(cor_mat, i, fp2_idcs, paths_or_vertices, pre_load_vertices) 
+                                for i in r])
+        loop.run_until_complete(looper)
 
     # save result
-    fname = '_'.join('cor_mat_vertex24x6', save_suffix)
+    fname = '_'.join(['cor_mat_vertex24x6', save_suffix])
     np.save(f'{fname}.npy', cor_mat)
     return cor_mat
 
