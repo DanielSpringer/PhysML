@@ -32,12 +32,13 @@ class VertexWrapper(BaseWrapper[AutoEncoderVertex, VertexConfig]):
         inputs, idcs = batch
         if self.encode_only:
             pred = self.model.encode(inputs)
+            return pred
         else:
             pred = self.model(inputs)
-        for i, p in enumerate(pred):
-            idx = [idx[i] for idx in idcs]
-            idx[self.replace_at] = slice(None)
-            self.pred_vertex[*idx] = p
+            for i, p in enumerate(pred):
+                idx = [idx[i] for idx in idcs]
+                idx[self.replace_at] = slice(None)
+                self.pred_vertex[*idx] = p
 
 
 class VertexWrapper24x6(VertexWrapper):

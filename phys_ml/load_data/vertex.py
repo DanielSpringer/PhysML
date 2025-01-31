@@ -50,7 +50,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
 
             # sample random indices of a 576^3 matrix and merge all rows through the sampled indices
             random.seed(config.sample_seed)
-            merged_slices, indices = self._sample(vertex, config)
+            merged_slices, indices = self.sample(vertex, config.sample_count_per_vertex)
         
             # Append result to data_in
             self.data_in_slices = torch.cat([self.data_in_slices, 
@@ -66,12 +66,13 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         self.data_target = deepcopy(self.data_in_slices[:, idx_range])
         assert list(self.data_target[0]) == list(self.data_in_slices[0][idx_range])
     
-    def _sample(self, vertex: np.ndarray, config: VertexConfig) -> tuple[np.ndarray, np.ndarray]:
-        indices = random.sample(range(self.length**self.dim), config.sample_count_per_vertex)
-        indices = np.array([[(x // self.length**i) % self.length for i in range(self.dim)] for x in indices])
+    @classmethod
+    def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int) -> tuple[list[list[float]], np.ndarray]:
+        indices = random.sample(range(cls.length**cls.dim), sample_count_per_vertex)
+        indices = np.array([[(x // cls.length**i) % cls.length for i in range(cls.dim)] for x in indices])
 
         # Create and merge all row combinations
-        merged_slices = [self.get_vector_from_vertex(vertex, *idcs) for idcs in indices]
+        merged_slices = [cls.get_vector_from_vertex(vertex, *idcs) for idcs in indices]
         return merged_slices, indices
     
     @staticmethod
@@ -122,6 +123,11 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
     
     def __init__(self, config):
         super().__init__(config)
+    
+    @classmethod
+    def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int) -> tuple[list[list[float]], np.ndarray]:
+        cls.__new__(cls)
+        return super().sample(vertex, sample_count_per_vertex)
     
     @staticmethod
     def get_vector_from_vertex(vertex: np.ndarray, k1x: int, k1y: int, k2x: int, k2y: int, 

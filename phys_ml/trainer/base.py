@@ -179,9 +179,7 @@ class BaseTrainer(Generic[T, S, R]):
         if new_data is None:
             new_data = self.dataset.load_from_file(new_data_path)
         if load_from:
-            ckpt_path = self.get_model_ckpt(load_from)
-            self.wrapper = self.config.model_wrapper.load_from_checkpoint(ckpt_path, config=self.config, 
-                                                                          in_dim=self.input_size)
+            self.load_model(load_from, predict=False)
         self.wrapper.model.eval()
         device = self.get_device_from_accelerator(self.config.device_type)
         input = torch.tensor(new_data, dtype=torch.float32).to(device)
@@ -190,7 +188,7 @@ class BaseTrainer(Generic[T, S, R]):
         return pred
     
     def init_trainer(self, train_mode: TrainerModes, load_from: str|None = None) -> None:
-        self.wrapper = self.config.model_wrapper(self.config, self.input_size)
+        self.load_model(load_from, predict=False)
         ''' Logging and checkpoint saving '''
         logger = self.set_logging(load_from)
 
@@ -306,6 +304,14 @@ class BaseTrainer(Generic[T, S, R]):
                         return path
         else:
             return path
+    
+    def load_model(self, load_from: str, predict: bool = False, encode_only: bool = False):
+        ckpt_path = self.get_model_ckpt(load_from)
+        self.wrapper = self.config.model_wrapper.load_from_checkpoint(ckpt_path, config=self.config, 
+                                                                      in_dim=self.input_size)
+        self.wrapper.encode_only = encode_only
+        if predict:
+            self.wrapper.model.eval()
 
     def load_config_from_saves(self, save_path: str, **kwargs) -> None:
         """

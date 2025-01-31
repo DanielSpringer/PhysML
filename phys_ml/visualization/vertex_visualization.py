@@ -78,6 +78,8 @@ def _create_plot(ax: axes.Axes, data: np.ndarray, axis: int, colmap: str|mplcolo
         assert axis >= 1 and axis <= 6, f"Axis must be in range [1,{k_dim * space_dim}]"
         k = (axis + 1) // 2
         x_label, y_label = f'$k_{{{k}_x}}$', f'$k_{{{k}_y}}$'
+    else:
+        x_label, y_label = '', ''
     img = _plot(data, ax, x_label, y_label, colmap, vmin, vmax, title)
     return img
 

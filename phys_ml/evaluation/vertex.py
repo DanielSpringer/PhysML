@@ -32,7 +32,7 @@ def process_vertex(cor_mat: np.ndarray, i: int, fp2_idcs: list[list[int]],
         vertex1 = paths_or_vertices[i]
     else:
         vertex1 = vertvis.AutoEncoderVertexDataset.load_from_file(paths_or_vertices[i])
-    for j in tqdm(fp2_idcs[i]):
+    for j in tqdm(fp2_idcs[i], leave=False):
         if pre_load_vertices:
             vertex2 = paths_or_vertices[j]
         else:
