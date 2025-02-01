@@ -6,11 +6,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Generic, Literal, Type, TypeVar, TYPE_CHECKING
 
-from lightning.pytorch.callbacks.callback import Callback
+from lightning.pytorch.callbacks import Callback, ModelCheckpoint
 from torch.nn import Module
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
-
 
 if TYPE_CHECKING:
     from .. import wrapper, models, load_data
@@ -24,15 +23,19 @@ class Config(Generic[R, S, T]):
     _base_dir: str = Path(__file__).parent.parent.parent.as_posix()  # project base working directory
     model_name: str = 'BaseModule'                                   # name of the model class
     _model_wrapper: str = 'BaseWrapper'                              # name of the model wrapper class
-    resume: bool = False                                             # resume training from last checkpoint
+    resume: Literal['best', 'last']|str|None = None                  # resume training from checkpoint from given path or
+                                                                     #    'last' - most recent checkpoint, 
+                                                                     #    'best' - checkpoint with best score
     save_dir: str = 'saves'                                          # base directory for saved outputs
     save_path: str = ''                                              # path to saved outputs
     path_train: str = ''                                             # path to training data
     _dataset: str = 'FilebasedDataset'                               # name of the dataset class
     _data_loader: str = 'torch.utils.data.DataLoader'                # name of the data loader class
+    num_dataloader_workers: int = 8                                  # number of workers for the data loader
     sample_seed: int = 42                                            # seed for data sampling
     test_ratio: float = 0.2                                          # ratio of test data
-    subset: int|float|None = None                                    # either number or ratio of data files to load
+    subset: int|float|None = None                                    # either number or ratio of data files to load, 
+                                                                     #    if negative gives the number of files NOT to load
     subset_shuffle: bool = True                                      # randomly select data files
     subset_seed: int = 42                                            # seed for random data file selection
     
@@ -41,6 +44,7 @@ class Config(Generic[R, S, T]):
     out_dim: int = 128                                               # output dimension of the model
 
     # training
+    strategy: str|None = None                                        # training strategy for pytorch lightning trainer
     batch_size: int = 20                                             # batch size
     learning_rate: float = 0.0001                                    # learning rate
     weight_decay: float = 1e-05                                      # weight decay
@@ -60,10 +64,11 @@ class Config(Generic[R, S, T]):
     # lightning callbacks
     _model_checkpoint: str = 'ModelCheckpoint'                       # name of the model checkpoint class
     model_checkpoint_kwargs: dict[str, Any] = field(default_factory=lambda: {
-        'save_top_k': 10,       # Save top 10 models
+        'save_top_k': 1,        # Save top 10 models
         'monitor': 'val_loss',  # Monitor validation loss
         'mode': 'min',          # 'min' for minimizing the validation loss
-        'verbose': True
+        'verbose': True,
+        'save_last': True,
     })                                                               # keyword arguments for the model checkpoint class
     _callbacks: list[str] = field(default_factory=lambda: [])        # list of callback class names
     callbacks_kwargs: dict[str, dict[str, Any]] = field(default_factory=lambda: {
@@ -193,14 +198,14 @@ class Config(Generic[R, S, T]):
         return self._instantiate_type('activation', **kwargs)
     
     @property
-    def model_checkpoint(self) -> type[Callback]:
+    def model_checkpoint(self) -> type[ModelCheckpoint]:
         return self.resolve_objectname(self._model_checkpoint, 'lightning.pytorch.callbacks')
     
     @model_checkpoint.setter
     def model_checkpoint(self, value: str):
         self._model_checkpoint = value
     
-    def get_model_checkpoint(self, **kwargs) -> Callback:
+    def get_model_checkpoint(self, **kwargs) -> ModelCheckpoint:
         """Get an instantiation of the model_checkpoint class-object using `self.model_checkpoint_kwargs` as arguments.
         Use `**kwargs` to overwrite arguments set in `self.model_checkpoint_kwargs`."""
         return self._instantiate_type('model_checkpoint', **kwargs)

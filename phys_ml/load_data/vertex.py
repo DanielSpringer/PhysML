@@ -21,7 +21,6 @@ class AutoEncoderVertexDataset(FilebasedDataset):
     k_dim = 3
     dim = k_dim
     length = n_freq**space_dim
-    target_length = length
     
     def __init__(self, config: VertexConfig):
         config.matrix_dim = self.dim
@@ -31,11 +30,13 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         # Subsample files
         file_paths = glob.glob(f"{config.path_train}/*.h5")
         subset = config.subset
-        if subset is not None and subset > 0:
+        if subset is not None and subset != 0:
             n_files = len(file_paths)
             if type(subset) == float:
                 subset = int(n_files * subset)
             if subset < n_files:
+                if subset < 0:
+                    subset = n_files + subset
                 if config.subset_shuffle:
                     random.seed(config.subset_seed)
                     file_paths = random.sample(file_paths, max(subset, 1))
@@ -49,7 +50,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
 
             # sample random indices of a 576^3 matrix and merge all rows through the sampled indices
             random.seed(config.sample_seed)
-            merged_slices, indices = self._sample(vertex, config)
+            merged_slices, indices = self.sample(vertex, config.sample_count_per_vertex)
         
             # Append result to data_in
             self.data_in_slices = torch.cat([self.data_in_slices, 
@@ -61,16 +62,17 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         # Construct target data
         axis = config.construction_axis
         assert axis <= self.dim, f"Axis must be in range [1,{self.dim}]"
-        idx_range = slice(self.target_length * (self.dim - axis), self.target_length * (self.dim - axis + 1))
+        idx_range = slice(self.length * (self.dim - axis), self.length * (self.dim - axis + 1))
         self.data_target = deepcopy(self.data_in_slices[:, idx_range])
         assert list(self.data_target[0]) == list(self.data_in_slices[0][idx_range])
     
-    def _sample(self, vertex: np.ndarray, config: VertexConfig) -> tuple[np.ndarray, np.ndarray]:
-        indices = random.sample(range(self.length**self.dim), config.sample_count_per_vertex)
-        indices = np.array([[(x // self.length**i) % self.length for i in range(self.dim)] for x in indices])
+    @classmethod
+    def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int) -> tuple[list[list[float]], np.ndarray]:
+        indices = random.sample(range(cls.length**cls.dim), sample_count_per_vertex)
+        indices = np.array([[(x // cls.length**i) % cls.length for i in range(cls.dim)] for x in indices])
 
         # Create and merge all row combinations
-        merged_slices = [self.get_vector_from_vertex(vertex, x, y, z) for x, y, z in indices]
+        merged_slices = [cls.get_vector_from_vertex(vertex, *idcs) for idcs in indices]
         return merged_slices, indices
     
     @staticmethod
@@ -114,16 +116,18 @@ class AutoEncoderVertexDataset(FilebasedDataset):
 
 
 class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
-    dim = AutoEncoderVertexDataset.space_dim * AutoEncoderVertexDataset.k_dim
-    target_length = AutoEncoderVertexDataset.n_freq
-
-    def _sample(self, vertex: np.ndarray, config: VertexConfig) -> tuple[np.ndarray, np.ndarray]:
-        indices = random.sample(range(self.n_freq**self.dim), config.sample_count_per_vertex)
-        indices = np.array([[(x // self.n_freq**i) % self.n_freq for i in range(self.dim)] for x in indices])
-
-        # Create and merge all row combinations
-        merged_slices = [self.get_vector_from_vertex(vertex, *coords) for coords in indices]
-        return merged_slices, indices
+    def __new__(cls, *args, **kwargs):
+        cls.dim = cls.space_dim * cls.k_dim
+        cls.length = cls.n_freq
+        return super().__new__(cls)
+    
+    def __init__(self, config):
+        super().__init__(config)
+    
+    @classmethod
+    def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int) -> tuple[list[list[float]], np.ndarray]:
+        cls.__new__(cls)
+        return super().sample(vertex, sample_count_per_vertex)
     
     @staticmethod
     def get_vector_from_vertex(vertex: np.ndarray, k1x: int, k1y: int, k2x: int, k2y: int, 
@@ -139,7 +143,83 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
     
     @classmethod
     def to_3d_vertex(cls, vertex: np.ndarray) -> np.ndarray:
-        return vertex.reshape((cls.length,) * cls.k_dim, order='F')
+        return vertex.reshape((AutoEncoderVertexDataset.length,) * cls.k_dim, order='F')
+
+
+class PredictVertexDataset(AutoEncoderVertexDataset):
+    def __init__(self, config: VertexConfig, vertex_path: str|None = None, vertex: np.ndarray|None = None):
+        assert vertex_path or vertex is not None, "Either vertex_path or vertex must be provided."
+        if vertex is None:
+            vertex = self.load_from_file(vertex_path)
+        self.vertex = vertex
+        self.config = config
+        self.axis = self.config.construction_axis
+        self.random_idx_generator = random.Random(config.sample_seed)
+
+    def _get_random_idx(self) -> int:
+        return self.random_idx_generator.randint(0, self.length - 1)
+    
+    def _create_input_vector(self, idcs: list[int]) -> torch.Tensor:
+        inputs = torch.tensor(self.get_vector_from_vertex(self.vertex, *idcs), dtype=torch.float32)
+        if self.config.positional_encoding:
+            inputs = (torch.tensor(idcs), inputs)
+        return inputs
+    
+    def _get_initial_indices(self, idx: int) -> tuple[list[int], int]:
+        idcs = [(idx // self.length**(i - 1)) % self.length for i in range(self.dim - 1, 0, -1)]
+        random_idx = self._get_random_idx()
+        return idcs, random_idx
+
+    def __len__(self):
+        return self.length ** (self.dim - 1)
+    
+    def __getitem__(self, idx) -> tuple[torch.Tensor, list[int]]:
+        idcs, random_idx = self._get_initial_indices(idx)
+        idcs.insert(self.axis - 1, random_idx)
+        inputs = self._create_input_vector(idcs)
+        return inputs, idcs
+
+
+class PredictVertex24x6Dataset(PredictVertexDataset, AutoEncoderVertex24x6Dataset):
+    def __init__(self, config: VertexConfig, vertex_path: str|None = None, vertex: np.ndarray|None = None, 
+                 dim: int|None = None, other_k: int|None = None, fixed_idcs: list[int]|None = None):
+        PredictVertexDataset.__init__(self, config, vertex_path, vertex)
+        if dim is not None:
+            self.dim = dim
+        self.other_k = other_k
+        self.fixed_idcs = fixed_idcs
+
+        if self.dim in [2, 3, 6]:
+            self.replace_at = (self.axis - 1) % self.dim
+        elif self.dim == 4:
+            assert other_k is not None, "`other_k` must be provided for 4-dimensional vertex slice"
+            k = (self.axis + 1) // 2
+            ins_other = (other_k > k) * 2
+            self.replace_at = 2 - ins_other + ((self.axis - 1) % 2)
+        else:
+            raise ValueError(f"Invalid value for `dim`: {self.dim}")
+    
+    def __len__(self):
+        return PredictVertexDataset.__len__(self)
+    
+    def __getitem__(self, idx) -> tuple[torch.Tensor, list[int]]:
+        idcs, random_idx = self._get_initial_indices(idx)
+        if self.dim in [3, 6]:
+            idcs.insert(self.axis - 1, random_idx)
+            slice_idcs = idcs
+        elif self.dim in [2, 4]:
+            x = np.array([None] * 6)
+            x[self.axis - 1] = 0
+            x[(self.axis - 1) // 2 * 2 + self.axis % 2] = idcs[0]
+            if self.dim == 4:
+                x[(self.other_k - 1) * 2] = idcs[1]
+                x[(self.other_k - 1) * 2 + 1] = idcs[2]
+            slice_idcs = x[x != None]
+            x[x== None] = self.fixed_idcs
+            idcs = x
+            slice_idcs = slice_idcs.tolist()
+        inputs = self._create_input_vector(idcs)
+        return inputs, slice_idcs
 
 
 # run with:

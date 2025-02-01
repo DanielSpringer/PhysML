@@ -2,3 +2,5 @@
 /saves/*/
 __pycache__
 slurm-*.out
+.ipynb_checkpoints/
+/notebooks/vertex/models/*

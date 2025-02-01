@@ -41,7 +41,7 @@
 
     "AUTO_ENCODER_VERTEX_24X6": {
         "MODEL_NAME": "AutoEncoderVertex",
-        "model_wrapper": "VertexWrapper",
+        "model_wrapper": "VertexWrapper24x6",
         "resume": false,
 
         "path_train": "/gpfs/data/fs71925/shepp123/frgs_6d",

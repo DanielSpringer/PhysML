@@ -1,28 +1,111 @@
-from collections.abc import Callable
-from typing import Any
+import asyncio
+import nest_asyncio
+import glob
+import os
+import pickle
 
 import numpy as np
 
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from tqdm.notebook import tqdm
+
 from .. import metrics
 from ..visualization import vertex_visualization as vertvis
+from ..trainer import TrainerModes
+from ..trainer.vertex import VertexTrainer
 
 
-def evaluate_prediction(save_path: str, test_filename: str, target: np.ndarray, target_slice: np.ndarray,
-                        predict_func: Callable[...,np.ndarray], **kwargs) -> tuple[float, np.ndarray, np.ndarray]:
-    pred_slice = predict_func(test_filename, new_vertex=target, save_path=save_path, **kwargs)
-    if len(pred_slice.shape) == 4:
-        pred_slice = pred_slice.reshape((vertvis.AutoEncoderVertexDataset.length,) * 2, order='F')
-    rmse = metrics.rmse(target_slice, pred_slice)
+def background(f):
+    def wrapped(*args, **kwargs):
+        return asyncio.get_event_loop().run_in_executor(None, f, *args, **kwargs)
+    return wrapped
+
+
+@background
+def process_vertex(cor_mat: np.ndarray, i: int, fp2_idcs: list[list[int]], 
+                   paths_or_vertices: list[str]|list[np.ndarray], pre_load_vertices: bool = False):
+    cor_mat[i, i] = 1
+    if pre_load_vertices:
+        vertex1 = paths_or_vertices[i]
+    else:
+        vertex1 = vertvis.AutoEncoderVertexDataset.load_from_file(paths_or_vertices[i])
+    for j in tqdm(fp2_idcs[i], leave=False):
+        if pre_load_vertices:
+            vertex2 = paths_or_vertices[j]
+        else:
+            vertex2 = vertvis.AutoEncoderVertexDataset.load_from_file(paths_or_vertices[j])
+        cor_mat[i, j] = cor_mat[j, i] = (np.sum(vertex1 * vertex2) / 
+                                            (np.linalg.norm(vertex1) * np.linalg.norm(vertex2)))
+    del vertex1
+
+
+def vertex_correlation(vertex_dir: str, n_workers: int = -1, pre_load_vertices: bool = False, 
+                       save_suffix: str = '') -> np.ndarray:
+    """ pre_load_vertices: Load all vertices into memory. Requires ca. 100 GB of memory for all 51 vertices."""
+    nest_asyncio.apply()
+    paths_or_vertices = sorted(glob.glob(os.path.join(vertex_dir, '*.h5')))
+    if pre_load_vertices:
+        paths_or_vertices = [vertvis.AutoEncoderVertexDataset.load_from_file(fp) 
+                             for fp in tqdm(paths_or_vertices, desc='load files')]
+    s = len(paths_or_vertices)
+    cor_mat = np.empty((s, s))
+    fp2_idcs = [range(i, s) for i in range(1, s + 1)]
+    idx_ranges = ([range(s)] if n_workers == -1 
+                  else [range(*(i, min(i + n_workers, s))) for i in range(0, s, n_workers)])
+    for r in idx_ranges:
+        loop = asyncio.get_event_loop()
+        looper = asyncio.gather(*[process_vertex(cor_mat, i, fp2_idcs, paths_or_vertices, pre_load_vertices) 
+                                for i in r])
+        loop.run_until_complete(looper)
+
+    # save result
+    fname = '_'.join(['cor_mat_vertex24x6', save_suffix])
+    np.save(f'{fname}.npy', cor_mat)
+    return cor_mat
+
+
+def evaluate_prediction(save_path: str, test_filename: str, trainer: VertexTrainer, target: np.ndarray, 
+                        hidden_dims: list[int], target_slice: np.ndarray, 
+                        predict_func: Callable[...,np.ndarray]|None = None, 
+                        load_func: Callable[...,np.ndarray]|None = None, 
+                        slice_at: int|tuple[int,...]|None = None, axis: int|None = None, 
+                        **kwargs) -> tuple[float, np.ndarray, np.ndarray]:
+    assert predict_func is not None or load_func is not None, \
+        'Either `predict_func` or `load_func` must be provided.'
+    if load_func is None:
+        trainer.config.hidden_dims = hidden_dims
+        pred = predict_func(test_filename, new_vertex=target, train_mode=TrainerModes.JUPYTER, 
+                            load_from=save_path, **kwargs)
+    else:
+        pred = load_func(save_path)
+    if len(target.shape) == 3:
+        pred = trainer.dataset.to_3d_vertex(pred)
+    dim = len(pred.shape)
+    if dim in [3, 6]:
+        pred_slice = vertvis.get_mat_slice(pred, axis, slice_at)
+        rmse = metrics.rmse(target, pred)
+    else:
+        if dim == 4:
+            pred_slice = pred.reshape((vertvis.AutoEncoderVertexDataset.length,) * 2, order='F')
+        else:
+            pred_slice = pred
+        rmse = metrics.rmse(target_slice, pred_slice)
     eigvec = metrics.vertex.get_dominant_eigenvector(pred_slice)
     return rmse, eigvec, pred_slice
 
 
-def evaluate_all_models(train_results: list[dict[str, Any]], test_filename: str, target: np.ndarray, 
-                        slice_at: int|tuple[int,...]|None, axis: int, predict_func: Callable[...,np.ndarray], 
+def evaluate_all_models(train_results: list[dict[str, Any]], test_filename: str, trainer: VertexTrainer, 
+                        target: np.ndarray, slice_at: int|tuple[int,...]|None, axis: int, 
+                        predict_func: Callable[...,np.ndarray]|None = None, 
+                        load_func: Callable[...,np.ndarray]|None = None, 
                         **kwargs) -> tuple[dict[int, tuple[float, np.ndarray, np.ndarray]], np.ndarray]:
     target_slice = vertvis.get_mat_slice(target, axis, slice_at)
-    results = {mod_info['latent_dim']: evaluate_prediction(mod_info['save_path'], test_filename, target, 
-                                                           target_slice, predict_func, **kwargs)
+    results = {mod_info['latent_dim']: 
+               evaluate_prediction(mod_info['save_path'], test_filename, trainer, target, mod_info['hidden_dims'], 
+                                   target_slice, predict_func, load_func, slice_at, axis, **kwargs)
                for mod_info in train_results}
     return results, target_slice
 
@@ -32,6 +115,8 @@ def report_results(results: dict[int, tuple[float, np.ndarray, np.ndarray]], tar
     assert nrows * ncols >= len(results) + 1, \
         f"`{nrows=}`and `{ncols=}` not enough for {len(results + 1)} items to plot in `train_info` + target."
     
+    res_print = '\n   '.join([f'latent_dim={k}: RMSE={v[0]:.4f}' for k, v in results.items()])
+    print(f"RESULTS:\n   {res_print}")
     target_eigvec = metrics.vertex.get_dominant_eigenvector(target_slice)
 
     # vertex visualisation
@@ -44,7 +129,7 @@ def report_results(results: dict[int, tuple[float, np.ndarray, np.ndarray]], tar
             slice_k = (set(range(1,4)) - set(axis)).pop()
             params_str = f'$k_{slice_k}={slice_at[0] * 24 + slice_at[1]}$'
         elif isinstance(axis, int):
-            other_ks = set(range(1,4)) - {axis}
+            other_ks = set(range(1,4)) - {(axis + 1) // 2}
             params_str = ', '.join([f'$k_{{{k}_{c}}}={sl}$' 
                                     for (k, c), sl in zip([(k, c) for k in other_ks for c in ['x', 'y']], slice_at)])
     plot_data = {'target': target_slice}
@@ -67,12 +152,55 @@ def report_results(results: dict[int, tuple[float, np.ndarray, np.ndarray]], tar
                              xlabel='k', xticks=[])
 
 
-def evaluate_and_report(train_results: dict[str, Any], test_filename: str, target: np.ndarray, 
-                        slice_at: int|tuple[int,...]|None, axis: int, nrows:int, ncols: int,
-                        predict_func: Callable[...,np.ndarray], **kwargs):
+def evaluate_and_report(train_results: dict[str, Any], test_filename: str, trainer: VertexTrainer, 
+                        target: np.ndarray, slice_at: int|tuple[int,...]|None, axis: int, 
+                        nrows:int, ncols: int, predict_func: Callable[...,np.ndarray]|None = None, 
+                        load_func: Callable[...,np.ndarray]|None = None, 
+                        **kwargs):
     assert nrows * ncols >= len(train_results) + 1, \
         f"`{nrows=}`and `{ncols=}` not enough for {len(train_results + 1)} items to plot in `train_info` + target."
     
-    results, target_slice = evaluate_all_models(train_results, test_filename, target, slice_at, axis, 
-                                                predict_func, **kwargs)
+    results, target_slice = evaluate_all_models(train_results, test_filename, trainer, target, slice_at, axis, 
+                                                predict_func, load_func, **kwargs)
     report_results(results, target_slice, slice_at, axis, nrows, ncols)
+
+
+def load_info_dict(info_fn: str) -> list[dict[str, Any]]:
+    try:
+        info_dict = pickle.load(open(info_fn, 'rb'))
+    except:
+        info_dict = []
+    return info_dict
+
+
+def backup_info(info_fn: str) -> None:
+    # back_up existing info_files
+    info_name = info_fn.split('.')[0]
+    files = sorted(glob.glob(f'{info_name}*.pkl'))
+    if len(files) > 0:
+        last_i = files[-1].split('.')[0][-1] if len(files) > 1 else 0
+        os.rename(f'{info_name}.pkl', f'{info_name}{last_i + 1}.pkl')
+
+
+def eval_train(trainer: VertexTrainer, info_dict: list[dict[str, Any]], info_filename: str, hidden_dims: list, 
+               resume: bool = False, path: str|None = None, version: int|None = None):
+    if resume:
+        assert path or version, 'If resuming, either `path` or `version` must be provided.'
+        if not path:
+            if version:
+                path = (sorted(trainer.get_full_save_path().glob('*'))[-1] / f'version_{version}').as_posix()
+            else:
+                path = sorted(trainer.get_full_save_path().glob('*/*'))[-1].as_posix()
+        trainer.config.resume = True
+        trainer.config.save_path = path
+
+    trainer.config.hidden_dims = hidden_dims
+    trainer.train(train_mode=TrainerModes.JUPYTER)
+
+    if info_dict is None:
+        info_dict = load_info_dict(info_filename)
+    info_dict.append({'hidden_dims': hidden_dims, 'latent_dim': hidden_dims[-1], 
+                      'save_path': Path(trainer.config.save_path).as_posix()})
+    with open(info_filename, 'wb') as f:
+        pickle.dump(info_dict, f)
+    print(f">>> dim: {info_dict[-1]['latent_dim']}\n>>> save_path: '{info_dict[-1]['save_path']}'")

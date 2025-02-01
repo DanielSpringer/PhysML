@@ -78,6 +78,8 @@ def _create_plot(ax: axes.Axes, data: np.ndarray, axis: int, colmap: str|mplcolo
         assert axis >= 1 and axis <= 6, f"Axis must be in range [1,{k_dim * space_dim}]"
         k = (axis + 1) // 2
         x_label, y_label = f'$k_{{{k}_x}}$', f'$k_{{{k}_y}}$'
+    else:
+        x_label, y_label = '', ''
     img = _plot(data, ax, x_label, y_label, colmap, vmin, vmax, title)
     return img
 
@@ -162,4 +164,18 @@ def lineplot(x_list: Iterable[Iterable], y_list: Iterable[Iterable], labels: lis
     for i, (x, y) in enumerate(zip(x_list, y_list)):
         plt.plot(x, y, color=color_cycle[i], label=labels[i] if labels else None)
     _set_lineplot(bool(labels), title, lim, xlabel, ylabel, xticks)
+    plt.show()
+
+
+def plot_correlation(cor_mat: np.ndarray, title: str):
+    # Create the heatmap
+    plt.figure(figsize=(6, 5))
+    plt.imshow(cor_mat, extent=[0, 0.5, 0, 0.5], cmap='coolwarm', interpolation='nearest', origin="lower")
+    plt.colorbar(label='Correlation Coefficient')
+
+    # Add labels
+    plt.title(title)
+    plt.xlabel('tp')
+    plt.ylabel('tp')
+    plt.tight_layout()
     plt.show()
