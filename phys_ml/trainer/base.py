@@ -112,8 +112,13 @@ class BaseTrainer(Generic[T, S, R]):
         resume_from : Literal['last', 'best'] | str | None, optional
             Resume training from the last or best checkpoint or from a specific path. (defaults to None)
         """
-        ckpt_path = self.get_model_ckpt(resume_from or self.config.resume)
-        self.init_trainer(train_mode, Path(ckpt_path).parents[1])
+        # if resume_from := (resume_from or self.config.resume):
+        #     ckpt_path = self.get_model_ckpt(resume_from)
+        #     load_from = Path(ckpt_path).parents[1]
+        # else:
+        #     ckpt_path = load_from = None
+        load_from = resume_from or self.config.resume
+        ckpt_path = self.init_trainer(train_mode, load_from)
         self.pre_train()
         self._train(ckpt_path)
         self.post_train()
@@ -179,7 +184,7 @@ class BaseTrainer(Generic[T, S, R]):
         if new_data is None:
             new_data = self.dataset.load_from_file(new_data_path)
         if load_from:
-            self.load_model(load_from, predict=False)
+            _ = self.load_model(load_from, predict=False)
         self.wrapper.model.eval()
         device = self.get_device_from_accelerator(self.config.device_type)
         input = torch.tensor(new_data, dtype=torch.float32).to(device)
@@ -187,8 +192,8 @@ class BaseTrainer(Generic[T, S, R]):
         self.save_prediction(pred, Path(new_data_path).stem, 'predictions')
         return pred
     
-    def init_trainer(self, train_mode: TrainerModes, load_from: str|None = None) -> None:
-        self.load_model(load_from, predict=False)
+    def init_trainer(self, train_mode: TrainerModes, load_from: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str) -> str:
+        ckpt_path = self.load_model(load_from, predict=False)
         ''' Logging and checkpoint saving '''
         logger = self.set_logging(load_from)
 
@@ -202,6 +207,7 @@ class BaseTrainer(Generic[T, S, R]):
             if strategy := self.config.strategy:
                 strategy = 'ddp_notebook' if os.name == 'posix' else 'auto'
             self.trainer = Trainer(strategy=strategy, plugins=[LightningEnvironment()], **trainer_kwargs)
+        return ckpt_path
     
     def save_prediction(self, vertex_prediction: np.ndarray, filename: str, subfolder: str):
         p = self.get_full_save_path() / subfolder
@@ -268,7 +274,7 @@ class BaseTrainer(Generic[T, S, R]):
             pref = self.config.base_dir / self.config.save_dir
         return pref / self.project_name / save_path
     
-    def get_model_ckpt(self, path: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None = None) -> str:
+    def get_model_ckpt(self, path: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str) -> str:
         """
         Gets the best or latest model checkpoint.
         If trainer not fitted, gets the checkpoint with the highest epoch from the saved checkpoints.
@@ -279,10 +285,9 @@ class BaseTrainer(Generic[T, S, R]):
         str
             Path to the best or latest model checkpoint.
         """
-        if path is None:
-            if best_model_path:= self.trainer.checkpoint_callback.best_model_path:
-                return best_model_path
-        elif not path.endswith('.ckpt'):
+        if path.endswith('.ckpt'):
+            return path
+        else:
             CKPT_DIRNAME = 'checkpoints'
             if path == CKPT_TYPE.BEST or path == CKPT_TYPE.LAST:
                 ckpt_dir = self.get_full_save_path() / CKPT_DIRNAME
@@ -302,16 +307,20 @@ class BaseTrainer(Generic[T, S, R]):
                 for path in reversed(ckpt_paths):
                     if not path.endswith(f'{last_name}.ckpt'):
                         return path
-        else:
-            return path
     
-    def load_model(self, load_from: str, predict: bool = False, encode_only: bool = False):
-        ckpt_path = self.get_model_ckpt(load_from)
-        self.wrapper = self.config.model_wrapper.load_from_checkpoint(ckpt_path, config=self.config, 
-                                                                      in_dim=self.input_size)
+    def load_model(self, load_from: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None, predict: bool = False, 
+                   encode_only: bool = False) -> str:
+        ckpt_path = None
+        if load_from is not None:
+            ckpt_path = self.get_model_ckpt(load_from)
+            self.wrapper = self.config.model_wrapper.load_from_checkpoint(ckpt_path, config=self.config, 
+                                                                          in_dim=self.input_size)
+        else:
+            self.wrapper = self.config.model_wrapper(self.config, self.input_size)
         self.wrapper.encode_only = encode_only
         if predict:
             self.wrapper.model.eval()
+        return ckpt_path
 
     def load_config_from_saves(self, save_path: str, **kwargs) -> None:
         """
