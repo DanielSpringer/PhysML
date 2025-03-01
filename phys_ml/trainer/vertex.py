@@ -7,7 +7,7 @@ import torch
 from ..config.vertex import *
 from ..load_data.vertex import *
 from ..wrapper.vertex import *
-from . import BaseTrainer, CKPT_TYPE, TrainerModes
+from . import BaseTrainer, TrainerModes
 
 
 class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWrapper]):
@@ -32,8 +32,7 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
 
         # predict
         if load_from:
-            ckpt_path = self.get_model_ckpt(load_from)
-            self.init_trainer(train_mode, Path(ckpt_path).parents[1])
+            ckpt_path = self.init_trainer(train_mode, load_from)
         pred_vertex = self.prepare_prediction_matrix(dataset.dim, encode_only, 
                                                      replace_at=self.config.construction_axis-1)
         self.wrapper.set_predictor(pred_vertex, encode_only)
@@ -102,8 +101,7 @@ class VertexTrainer24x6(VertexTrainer, BaseTrainer[Vertex24x6Config, AutoEncoder
 
         # predict
         if load_from:
-            ckpt_path = self.get_model_ckpt(load_from)
-            self.init_trainer(train_mode, Path(ckpt_path).parents[1])
+            ckpt_path = self.init_trainer(train_mode, load_from)
         replace_at = dataset.replace_at
         pred_vertex = self.prepare_prediction_matrix(dim, encode_only, replace_at)
         self.wrapper.set_predictor(pred_vertex, encode_only, replace_at)

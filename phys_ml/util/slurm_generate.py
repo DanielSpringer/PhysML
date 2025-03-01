@@ -3,6 +3,7 @@ import json
 import sys
 
 from dataclasses import dataclass
+from functools import reduce
 from pathlib import Path
 from typing import Any
 
@@ -21,20 +22,23 @@ class SlurmOptions:
         return self.qos.removesuffix('_devel')
 
 
-def create_train_script(project_name: str, script_name: str, base_dir: str|Path, trainer: str|None = None, 
+def create_train_script(project_name: str, script_name: str, base_dir: str|Path, trainer_path: list[str], 
                         trainer_kwargs: dict[str, Any]|None = None) -> None:
-    extra_kwargs = trainer_kwargs.pop('config_kwargs', {})
-    trainer_kwargs.update(extra_kwargs)
+    if isinstance(base_dir, str):
+        base_dir = Path(base_dir)
+    trainer_classname = trainer_path[-1]
+    trainer_path = '.'.join(['phys_ml.trainer'] + trainer_path[:-1])
     args_string = ', '.join([f'{k}={repr(v)}' for k, v in trainer_kwargs.items()])
 
     s = f"""import sys, os
-sys.path.append(os.getcwd())
+sys.path.append('{base_dir.as_posix()}')
 
-from phys_ml.trainer import TrainerModes, {trainer}
+from phys_ml.trainer import TrainerModes
+from {trainer_path} import {trainer_classname}
 
 
 def train():
-    trainer = {trainer}('{project_name}', {args_string})
+    trainer = {trainer_classname}('{project_name}', {args_string})
     trainer.train(train_mode=TrainerModes.SLURM)
 
 
@@ -73,17 +77,19 @@ def create(project_name: str, script_name: str, pyenv_dir: str,
         Kwargs for instantiating the trainer-class in the train-script.\n
         Only required if `train_script_name` is not given. (defaults to None)
     """
-    config_cls: type[Config] = getattr(importlib.import_module('phys_ml.trainer'), trainer).config_cls
+    module = importlib.import_module('phys_ml.trainer')
+    trainer_path = trainer.split('.')
+    config_cls: type[Config] = reduce(getattr, trainer_path, module).config_cls
     config_kwargs = {k: trainer_kwargs[k] 
                      for k in ['config_name', 'subconfig_name', 'config_dir', 'config_kwargs'] 
                      if k in trainer_kwargs}
     config = config_cls.from_json(**config_kwargs)
     venv_files = Path(pyenv_dir, '*').as_posix()
     source_path = Path(pyenv_dir, 'bin/activate').as_posix()
-    current_base_dir = Path(__file__).parent.parent.parent
+    current_base_dir = Path(__file__).parents[2].resolve()
     
     if not train_script_name:
-        create_train_script(project_name, script_name, current_base_dir, trainer, trainer_kwargs)
+        create_train_script(project_name, script_name, current_base_dir, trainer_path, trainer_kwargs)
         train_script_name = f'train_{script_name}.py'
     train_script_path = (current_base_dir / 'train_scripts' / project_name / train_script_name).as_posix()
     
@@ -106,7 +112,7 @@ srun uv run {train_script_path}
 """
     fdir = current_base_dir / 'slurm' / project_name
     fdir.mkdir(parents=True, exist_ok=True)
-    (fdir / f'vsc_{script_name}.slrm').write_text(s)
+    (fdir / f'{script_name}.slrm').write_text(s)
 
 
 def create_from_config(config_file: str|Path, slurm_config_name: str = 'SLURM_CONFIG') -> None:

@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+#SBATCH -J vertex_24x6
+#SBATCH --mail-type=BEGIN    # first have to state the type of event to occur 
+#SBATCH --mail-user=<email@address.at>    # and then your email address
+
+#SBATCH --partition=zen3_0512_a100x2
+#SBATCH --qos=zen3_0512_a100x2_devel
+#SBATCH --ntasks-per-node=2
+#SBATCH --nodes=1
+#SBATCH --time=00:10:00
+
+FILES=(/gpfs/data/fs71925/shepp123/PhysML/.venv/*)
+source /gpfs/data/fs71925/shepp123/PhysML/.venv/bin/activate
+
+srun uv run C:/OneDrive - TU Wien/Studium/Master_5. Semester/Masters thesis/code/PhysML/train_scripts/vertex_24x6/train_vsc_test.py

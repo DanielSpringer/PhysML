@@ -1,11 +1,12 @@
 import sys, os
 sys.path.append(os.getcwd())
 
-from phys_ml.trainer import TrainerModes, VertexTrainer24x6
+from phys_ml.trainer import TrainerModes
+from phys_ml.trainer.vertex import VertexTrainer
 
 
 def train():
-    trainer = VertexTrainer24x6('vertex', project_name='vertex', config_name='confmod_auto_encoder.json', subconfig_name='AUTO_ENCODER_VERTEX_24X6', test=1)
+    trainer = VertexTrainer('vertex', project_name='vertex', config_name='confmod_auto_encoder.json', subconfig_name='AUTO_ENCODER_VERTEX', test=1)
     trainer.train(train_mode=TrainerModes.SLURM)
 
 
