@@ -147,6 +147,7 @@ class BaseTrainer(Generic[T, S, R]):
         
         ''' Train '''
         self.trainer.fit(self.wrapper, train_dataloader, validation_dataloader, ckpt_path=ckpt_path)
+        #self.trainer.fit(self.wrapper, ckpt_path=ckpt_path)
     
     def pre_train(self) -> None:
         """
@@ -202,10 +203,10 @@ class BaseTrainer(Generic[T, S, R]):
         trainer_kwargs = {'max_epochs': self.config.epochs, 'accelerator': self.config.device_type, 
                           'devices': self.config.devices, 'logger': logger, 'callbacks': callbacks}
         if train_mode == TrainerModes.SLURM:
-            self.trainer = Trainer(num_nodes=self.config.num_nodes, strategy='ddp', **trainer_kwargs)
+            strategy = self.config.strategy or 'ddp'
+            self.trainer = Trainer(num_nodes=self.config.num_nodes, strategy=strategy, **trainer_kwargs)
         elif train_mode == TrainerModes.JUPYTER:
-            if strategy := self.config.strategy:
-                strategy = 'ddp_notebook' if os.name == 'posix' else 'auto'
+            strategy = self.config.strategy or ('ddp_notebook' if os.name == 'posix' else 'auto')
             self.trainer = Trainer(strategy=strategy, plugins=[LightningEnvironment()], **trainer_kwargs)
         return ckpt_path
     

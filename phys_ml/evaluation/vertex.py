@@ -179,7 +179,7 @@ def backup_info(info_fn: str) -> None:
     files = sorted(glob.glob(f'{info_name}*.pkl'))
     if len(files) > 0:
         last_i = files[-1].split('.')[0][-1] if len(files) > 1 else 0
-        os.rename(f'{info_name}.pkl', f'{info_name}{last_i + 1}.pkl')
+        os.rename(f'{info_name}.pkl', f'{info_name}{last_i + 1:02d}.pkl')
 
 
 def eval_train(trainer: VertexTrainer, info_dict: list[dict[str, Any]], info_filename: str, hidden_dims: list, 

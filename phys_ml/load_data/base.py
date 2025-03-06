@@ -32,6 +32,7 @@ class FilebasedDataset(Dataset, ABC):
                         (defaults to True)
         :type shuffle: bool, optional
         """
+        self.config = config
     
     @staticmethod
     @abstractmethod

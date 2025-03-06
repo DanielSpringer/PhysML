@@ -77,5 +77,25 @@
             "qos": "zen3_0512_a100x2",
             "time": "04:00:00"
         }
+    },
+    "AUTO_ENCODER_VERTEX_24X6_SPARSE": {
+        "resume": null,
+        "path_train": "/gpfs/data/fs71925/shepp123/frgs_6d",
+        "batch_size": 20,
+        "learning_rate": 1e-4,
+        "weight_decay": 1e-5,
+        "epochs": 100,
+        "hidden_dims": [128, 64, 32],
+        "out_dim": 24,
+        "device_type": "gpu",
+        "devices": 2,
+        "num_nodes": 1,
+
+        "subset": 10, 
+        "subset_shuffle": false, 
+        
+        "construction_axis": 3,
+        "sample_count_per_vertex": 2000,
+        "positional_encoding": false
     }
 }

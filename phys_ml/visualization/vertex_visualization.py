@@ -14,6 +14,7 @@ from ..load_data.vertex import AutoEncoderVertexDataset
 cmap_big = mpl.colormaps['twilight_shifted'].resampled(int(1e3))
 #cmap_resc = mplcolors.ListedColormap(cmap_big(np.linspace(0.075, 0.925, 10000)))
 cmap_resc = mpl.colormaps['viridis'].resampled(int(1e3))
+cmap_resc.set_bad(color='black')
 color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 
@@ -89,7 +90,7 @@ def _prepare_data(data: list[np.ndarray], axis: int|tuple[int,int],
     for i, d in enumerate(data):
         if len(d.shape) != 2 and slice_at is not None:
             data[i] = get_mat_slice(d, axis, slice_at)
-    return data, min([d.min() for d in data]), max([d.max() for d in data])
+    return data, min([np.nanmin(d) for d in data]), max([np.nanmax(d) for d in data])
 
 
 def plot_section(data: np.ndarray, axis: int|tuple[int,int], slice_at: int|tuple[int,...],

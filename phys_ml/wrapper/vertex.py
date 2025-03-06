@@ -44,3 +44,21 @@ class VertexWrapper(BaseWrapper[AutoEncoderVertex, VertexConfig]):
 class VertexWrapper24x6(VertexWrapper):
     def __init__(self, config: Vertex24x6Config, in_dim: int):
         super().__init__(config, in_dim)
+
+
+class VertexWrapper24x6Sparse(VertexWrapper24x6):
+    def __init__(self, config: Vertex24x6SparseConfig, in_dim: int):
+        super().__init__(config, in_dim)
+    
+    def predict_step(self, batch: tuple[torch.Tensor, torch.Tensor]):
+        inputs, idcs = batch
+        if self.encode_only:
+            pred = self.model.encode(inputs)
+            return pred
+        else:
+            pred = self.model(inputs)
+            for i, p in enumerate(pred):
+                full_vector = self.config.dataset.sparse_to_full_vector(p)
+                idx = [idx[i] for idx in idcs]
+                idx[self.replace_at] = slice(None)
+                self.pred_vertex[*idx] = full_vector

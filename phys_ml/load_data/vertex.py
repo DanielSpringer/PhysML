@@ -23,6 +23,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
     length = n_freq**space_dim
     
     def __init__(self, config: VertexConfig):
+        super().__init__(config)
         config.matrix_dim = self.dim
         self.data_in_indices: torch.Tensor = torch.tensor([])
         self.data_in_slices: torch.Tensor = torch.tensor([])
@@ -60,11 +61,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
             assert self.data_in_indices.shape[0] == self.data_in_slices.shape[0]
         
         # Construct target data
-        axis = config.construction_axis
-        assert axis <= self.dim, f"Axis must be in range [1,{self.dim}]"
-        idx_range = slice(self.length * (self.dim - axis), self.length * (self.dim - axis + 1))
-        self.data_target = deepcopy(self.data_in_slices[:, idx_range])
-        assert list(self.data_target[0]) == list(self.data_in_slices[0][idx_range])
+        self.data_target = self.construct_targets()
     
     @classmethod
     def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int) -> tuple[list[list[float]], np.ndarray]:
@@ -75,8 +72,16 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         merged_slices = [cls.get_vector_from_vertex(vertex, *idcs) for idcs in indices]
         return merged_slices, indices
     
-    @staticmethod
-    def get_vector_from_vertex(vertex: np.ndarray, x: int, y: int, z: int) -> list[float]:
+    def construct_targets(self) -> torch.Tensor:
+        axis = self.config.construction_axis
+        assert axis <= self.dim, f"Axis must be in range [1,{self.dim}]"
+        idx_range = slice(self.length * (self.dim - axis), self.length * (self.dim - axis + 1))
+        targets = deepcopy(self.data_in_slices[:, idx_range])
+        assert list(targets[0]) == list(self.data_in_slices[0][idx_range])
+        return targets
+    
+    @classmethod
+    def get_vector_from_vertex(cls, vertex: np.ndarray, x: int, y: int, z: int) -> list[float]:
         return [
             *vertex[x, y, :], 
             *vertex[x, :, z], 
@@ -121,16 +126,13 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
         cls.length = cls.n_freq
         return super().__new__(cls)
     
-    def __init__(self, config):
-        super().__init__(config)
-    
     @classmethod
     def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int) -> tuple[list[list[float]], np.ndarray]:
         cls.__new__(cls)
         return super().sample(vertex, sample_count_per_vertex)
     
-    @staticmethod
-    def get_vector_from_vertex(vertex: np.ndarray, k1x: int, k1y: int, k2x: int, k2y: int, 
+    @classmethod
+    def get_vector_from_vertex(cls, vertex: np.ndarray, k1x: int, k1y: int, k2x: int, k2y: int, 
                                k3x: int, k3y: int) -> list[float]:
         return [
             *vertex[k1x, k1y, k2x, k2y, k3x, :],  # k3y
@@ -144,6 +146,51 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
     @classmethod
     def to_3d_vertex(cls, vertex: np.ndarray) -> np.ndarray:
         return vertex.reshape((AutoEncoderVertexDataset.length,) * cls.k_dim, order='F')
+
+
+class AutoEncoderVertex24x6SparseDataset(AutoEncoderVertex24x6Dataset):
+    def __init__(self, config: VertexConfig):
+        super().__init__(config)
+        vertex_size = self.length**self.dim
+        self.p = 1. * np.arange(vertex_size) / (vertex_size - 1)
+
+    def sparsify(self, vertex: np.ndarray) -> np.ndarray:
+        cutoff = np.sort(vertex.flatten())[self.p > self.config.sparsify_rate].min()
+        sparse_vertex = vertex.copy()
+        sparse_vertex[sparse_vertex < cutoff] = np.nan
+        return sparse_vertex
+    
+    @classmethod
+    def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int) -> tuple[list[list[float]], np.ndarray]:
+        vertex = cls.sparsify(vertex)
+        return super().sample(vertex, sample_count_per_vertex)
+    
+    @classmethod
+    def get_vector_from_vertex(cls, vertex: np.ndarray, k1x: int, k1y: int, k2x: int, k2y: int, 
+                               k3x: int, k3y: int) -> np.ndarray:
+        full_vector = np.array(AutoEncoderVertex24x6Dataset.get_vector_from_vertex(vertex, k1x, k1y, k2x, 
+                                                                                   k2y, k3x, k3y))
+        dim_idcs = np.repeat(np.arange(cls.dim), cls.length)
+        dim_idcs = dim_idcs[~np.isnan(full_vector)]
+        pos_idcs = np.tile(np.arange(cls.length), cls.dim)
+        pos_idcs = pos_idcs[~np.isnan(full_vector)]
+        full_vector = full_vector[~np.isnan(full_vector)]
+        input_vector = np.array([dim_idcs, pos_idcs, full_vector]).T.ravel()
+        return input_vector
+    
+    def construct_targets(self) -> torch.Tensor:
+        axis = self.config.construction_axis
+        assert axis <= self.dim, f"Axis must be in range [1,{self.dim}]"
+        idx_range = slice(3 * self.length * (self.dim - axis), 3 * self.length * (self.dim - axis + 1))
+        target_vector = deepcopy(self.data_in_slices[:, idx_range])
+        return target_vector
+    
+    @classmethod
+    def sparse_to_full_vector(cls, sparse_vector: np.ndarray) -> np.ndarray:
+        vector = np.repeat(np.nan, cls.dim * cls.length)
+        for v in sparse_vector.reshape((cls.length, cls.dim)):
+            vector[v[0] * cls.length + v[1]] = v[2]
+        return vector
 
 
 class PredictVertexDataset(AutoEncoderVertexDataset):
@@ -220,6 +267,13 @@ class PredictVertex24x6Dataset(PredictVertexDataset, AutoEncoderVertex24x6Datase
             slice_idcs = slice_idcs.tolist()
         inputs = self._create_input_vector(idcs)
         return inputs, slice_idcs
+
+
+class PredictVertex24x6SparseDataset(PredictVertex24x6Dataset):
+    def __init__(self, config, vertex_path = None, vertex = None, dim = None, other_k = None, fixed_idcs = None):
+        vertex = AutoEncoderVertex24x6SparseDataset.sparsify(vertex)
+        super().__init__(config, vertex_path, vertex, dim, other_k, fixed_idcs)
+
 
 
 # run with:

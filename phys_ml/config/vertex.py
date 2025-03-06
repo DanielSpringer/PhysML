@@ -14,6 +14,9 @@ class VertexConfig(Config['models.AutoEncoderVertex','wrapper.VertexWrapper',
     positional_encoding: bool = False
     matrix_dim = 3
 
+    model_name: str = 'AutoEncoderVertex'
+    _model_wrapper: str = 'VertexWrapper'
+    _dataset: str = 'AutoEncoderVertexDataset'
     _predict_dataset: str = 'PredictVertexDataset'
 
     @property
@@ -29,5 +32,13 @@ class Vertex24x6Config(VertexConfig, Config['models.AutoEncoderVertex','wrapper.
                                             'load_data.AutoEncoderVertex24x6Dataset']):
     sample_count_per_vertex: int = 2000
     matrix_dim = 6
-
+    _model_wrapper: str = 'VertexWrapper24x6'
+    _dataset: str = 'AutoEncoderVertex24x6Dataset'
     _predict_dataset: str = 'PredictVertex24x6Dataset'
+
+
+class Vertex24x6SparseConfig(Vertex24x6Config):
+    sparsify_rate: int = 0.8
+    _model_wrapper: str = 'VertexWrapper24x6Sparse'
+    _dataset: str = 'AutoEncoderVertex24x6SparseDataset'
+    _predict_dataset: str = 'PredictVertex24x6SparseDataset'

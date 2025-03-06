@@ -4,6 +4,8 @@ import numpy as np
 import lightning as L
 import torch
 
+from torch.utils.data import DataLoader, random_split
+
 from ..config import Config
 from ..models import BaseModule
 
@@ -28,6 +30,12 @@ class BaseWrapper(L.LightningModule, Generic[S, T]):
         self.model: S = config.model(config, in_dim)
         self.criterion: torch.nn = config.get_criterion()
         self.config: T = config
+
+        # self.dataset = self.config.dataset(self.config)
+        # self.data_loader: type[DataLoader] = self.config.data_loader
+        # self.train_set, self.validation_set = random_split(self.dataset, 
+        #                                                    [1 - self.config.test_ratio, self.config.test_ratio], 
+        #                                                    generator=torch.Generator().manual_seed(42))
     
     def __call__(self, *args, **kwds) -> torch.Tensor:
         return super().__call__(*args, **kwds)
@@ -68,6 +76,18 @@ class BaseWrapper(L.LightningModule, Generic[S, T]):
         pred, targets, loss = self.step(batch)
         self.log('val_loss', loss.item(), prog_bar=True)
         return loss
+    
+    # def train_dataloader(self):
+    #     return self.data_loader(self.train_set, batch_size=self.config.batch_size, shuffle=True, 
+    #                             num_workers=self.config.num_dataloader_workers, 
+    #                             persistent_workers=bool(self.config.num_dataloader_workers), 
+    #                             pin_memory=True)
+    
+    # def val_dataloader(self):
+    #     return self.data_loader(self.validation_set, batch_size=self.config.batch_size, 
+    #                             num_workers=self.config.num_dataloader_workers, 
+    #                             persistent_workers=bool(self.config.num_dataloader_workers), 
+    #                             pin_memory=True)
     
     def configure_optimizers(self) -> dict[str, torch.optim.Optimizer]:
         """
