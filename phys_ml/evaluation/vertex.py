@@ -98,15 +98,15 @@ def evaluate_prediction(save_path: str, test_filename: str, trainer: VertexTrain
 
 
 def evaluate_all_models(train_results: list[dict[str, Any]], test_filename: str, trainer: VertexTrainer, 
-                        target: np.ndarray, slice_at: int|tuple[int,...]|None, axis: int, 
+                        target: np.ndarray, slice_at: int|tuple[int,...]|None, axis: int, keys: list[str],
                         predict_func: Callable[...,np.ndarray]|None = None, 
                         load_func: Callable[...,np.ndarray]|None = None, 
                         **kwargs) -> tuple[dict[int, tuple[float, np.ndarray, np.ndarray]], np.ndarray]:
     target_slice = vertvis.get_mat_slice(target, axis, slice_at)
-    results = {mod_info['latent_dim']: 
+    results = {key: 
                evaluate_prediction(mod_info['save_path'], test_filename, trainer, target, mod_info['hidden_dims'], 
                                    target_slice, predict_func, load_func, slice_at, axis, **kwargs)
-               for mod_info in train_results}
+               for mod_info, key in zip(train_results, keys)}
     return results, target_slice
 
 
@@ -153,14 +153,14 @@ def report_results(results: dict[int, tuple[float, np.ndarray, np.ndarray]], tar
 
 
 def evaluate_and_report(train_results: dict[str, Any], test_filename: str, trainer: VertexTrainer, 
-                        target: np.ndarray, slice_at: int|tuple[int,...]|None, axis: int, 
+                        target: np.ndarray, slice_at: int|tuple[int,...]|None, axis: int, keys: list[str],
                         nrows:int, ncols: int, predict_func: Callable[...,np.ndarray]|None = None, 
                         load_func: Callable[...,np.ndarray]|None = None, 
                         **kwargs):
     assert nrows * ncols >= len(train_results) + 1, \
         f"`{nrows=}`and `{ncols=}` not enough for {len(train_results + 1)} items to plot in `train_info` + target."
     
-    results, target_slice = evaluate_all_models(train_results, test_filename, trainer, target, slice_at, axis, 
+    results, target_slice = evaluate_all_models(train_results, test_filename, trainer, target, slice_at, axis, keys,
                                                 predict_func, load_func, **kwargs)
     report_results(results, target_slice, slice_at, axis, nrows, ncols)
 
@@ -191,7 +191,7 @@ def eval_train(trainer: VertexTrainer, info_dict: list[dict[str, Any]], info_fil
                 path = (sorted(trainer.get_full_save_path().glob('*'))[-1] / f'version_{version}').as_posix()
             else:
                 path = sorted(trainer.get_full_save_path().glob('*/*'))[-1].as_posix()
-        trainer.config.resume = True
+        trainer.config.resume = 'best'
         trainer.config.save_path = path
 
     trainer.config.hidden_dims = hidden_dims

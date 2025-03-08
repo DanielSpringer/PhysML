@@ -1,7 +1,10 @@
 import glob
+import os
 import random
 
 from copy import deepcopy
+from collections.abc import Callable
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -51,7 +54,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
 
             # sample random indices of a 576^3 matrix and merge all rows through the sampled indices
             random.seed(config.sample_seed)
-            merged_slices, indices = self.sample(vertex, config.sample_count_per_vertex)
+            merged_slices, indices = self.sample(vertex, config.sample_count_per_vertex, config=config)
         
             # Append result to data_in
             self.data_in_slices = torch.cat([self.data_in_slices, 
@@ -64,7 +67,8 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         self.data_target = self.construct_targets()
     
     @classmethod
-    def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int) -> tuple[list[list[float]], np.ndarray]:
+    def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int, 
+               **kwargs) -> tuple[list[list[float]], np.ndarray]:
         indices = random.sample(range(cls.length**cls.dim), sample_count_per_vertex)
         indices = np.array([[(x // cls.length**i) % cls.length for i in range(cls.dim)] for x in indices])
 
@@ -104,9 +108,9 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         return self.data_in_slices.shape[0]
 
     def __getitem__(self, idx):
-      if torch.is_tensor(idx):
-          idx = idx.tolist()
-      return self.data_in_indices[idx], self.data_in_slices[idx], self.data_target[idx]
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        return self.data_in_indices[idx], self.data_in_slices[idx], self.data_target[idx]
 
     @staticmethod
     def load_from_file(path: str) -> np.ndarray:
@@ -127,9 +131,10 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
         return super().__new__(cls)
     
     @classmethod
-    def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int) -> tuple[list[list[float]], np.ndarray]:
+    def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int, 
+               **kwargs) -> tuple[list[list[float]], np.ndarray]:
         cls.__new__(cls)
-        return super().sample(vertex, sample_count_per_vertex)
+        return super().sample(vertex, sample_count_per_vertex, **kwargs)
     
     @classmethod
     def get_vector_from_vertex(cls, vertex: np.ndarray, k1x: int, k1y: int, k2x: int, k2y: int, 
@@ -149,32 +154,26 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
 
 
 class AutoEncoderVertex24x6SparseDataset(AutoEncoderVertex24x6Dataset):
-    def __init__(self, config: VertexConfig):
+    def __init__(self, config: Vertex24x6SparseConfig):
         super().__init__(config)
-        vertex_size = self.length**self.dim
-        self.p = 1. * np.arange(vertex_size) / (vertex_size - 1)
 
-    def sparsify(self, vertex: np.ndarray) -> np.ndarray:
-        cutoff = np.sort(vertex.flatten())[self.p > self.config.sparsify_rate].min()
-        sparse_vertex = vertex.copy()
-        sparse_vertex[sparse_vertex < cutoff] = np.nan
-        return sparse_vertex
-    
     @classmethod
-    def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int) -> tuple[list[list[float]], np.ndarray]:
-        vertex = cls.sparsify(vertex)
-        return super().sample(vertex, sample_count_per_vertex)
-    
+    def compute_mask(cls, sparsify_rate: float) -> np.ndarray:
+        vertex_size = cls.length**cls.dim
+        p = 1. * np.arange(vertex_size) / (vertex_size - 1)
+        return p > sparsify_rate
+
     @classmethod
     def get_vector_from_vertex(cls, vertex: np.ndarray, k1x: int, k1y: int, k2x: int, k2y: int, 
                                k3x: int, k3y: int) -> np.ndarray:
+        dim_idcs = np.repeat(np.arange(cls.dim), cls.length)
+        pos_idcs = np.tile(np.arange(cls.length), cls.dim)
         full_vector = np.array(AutoEncoderVertex24x6Dataset.get_vector_from_vertex(vertex, k1x, k1y, k2x, 
                                                                                    k2y, k3x, k3y))
-        dim_idcs = np.repeat(np.arange(cls.dim), cls.length)
-        dim_idcs = dim_idcs[~np.isnan(full_vector)]
-        pos_idcs = np.tile(np.arange(cls.length), cls.dim)
-        pos_idcs = pos_idcs[~np.isnan(full_vector)]
-        full_vector = full_vector[~np.isnan(full_vector)]
+        mask = ~np.isnan(full_vector)
+        dim_idcs = dim_idcs[mask]
+        pos_idcs = pos_idcs[mask]
+        full_vector = full_vector[mask]
         input_vector = np.array([dim_idcs, pos_idcs, full_vector]).T.ravel()
         return input_vector
     
@@ -187,10 +186,16 @@ class AutoEncoderVertex24x6SparseDataset(AutoEncoderVertex24x6Dataset):
     
     @classmethod
     def sparse_to_full_vector(cls, sparse_vector: np.ndarray) -> np.ndarray:
-        vector = np.repeat(np.nan, cls.dim * cls.length)
+        vector = np.zeros(cls.dim * cls.length)
         for v in sparse_vector.reshape((cls.length, cls.dim)):
             vector[v[0] * cls.length + v[1]] = v[2]
         return vector
+    
+    @classmethod
+    def to_sparse(cls, vertex: np.ndarray, mask: np.ndarray) -> np.ndarray:
+        cutoff = np.sort(vertex.flatten())[mask].min()
+        vertex[vertex < cutoff] = 0.0
+        return vertex
 
 
 class PredictVertexDataset(AutoEncoderVertexDataset):
@@ -269,24 +274,14 @@ class PredictVertex24x6Dataset(PredictVertexDataset, AutoEncoderVertex24x6Datase
         return inputs, slice_idcs
 
 
-class PredictVertex24x6SparseDataset(PredictVertex24x6Dataset):
-    def __init__(self, config, vertex_path = None, vertex = None, dim = None, other_k = None, fixed_idcs = None):
-        vertex = AutoEncoderVertex24x6SparseDataset.sparsify(vertex)
-        super().__init__(config, vertex_path, vertex, dim, other_k, fixed_idcs)
-
-
 
 # run with:
 # ```
 # cd <...>/PhysML
 # python -c "from phys_ml.load_data import vertex;vertex.convert_3d_to_6d_vertex('../frgs')"
 # ```
-def convert_3d_to_6d_vertex(data_dir: str) -> None:
-    import os
-    from pathlib import Path
-    
+def convert_3d_to_6d_vertex(data_dir: str) -> np.ndarray:
     n_freq, dim = AutoEncoderVertexDataset.n_freq, 6
-
     data_dir: Path = Path(data_dir)
     new_dir = data_dir.parent / (data_dir.name + '_6d')
     os.makedirs(new_dir, exist_ok=True)
@@ -294,15 +289,39 @@ def convert_3d_to_6d_vertex(data_dir: str) -> None:
     file_paths = glob.glob(f"{data_dir}/*.h5")
     with tqdm(total=len(file_paths)) as prog:
         for file_path in file_paths:
-            # load 3-dimensional vertex matrix
-            vertex3 = AutoEncoderVertexDataset.load_from_file(file_path)
+            vertex = AutoEncoderVertexDataset.load_from_file(file_path)
 
             # reshape to a 24^6 matrix
-            vertex6 = vertex3.reshape((n_freq,) * dim)
+            vertex_convert = vertex.reshape((n_freq,) * dim)
             
-            # store 6-dimesnional vertex matrix to disk
+            # store new vertex to disk
             file_name = Path(file_path).name
             with h5py.File(new_dir / file_name, 'w') as file:
-                file.create_dataset("V/step0", data=vertex6, compression='lzf')
+                file.create_dataset("V/step0", data=vertex_convert, compression='lzf')
+            prog.update()
+
+
+# run with:
+# ```
+# cd <...>/PhysML
+# python -c "from phys_ml.load_data import vertex;vertex.convert_6d_to_sparse_vertex('../frgs', sparsify_rate)"
+# ```
+def convert_6d_to_sparse_vertex(data_dir: str, sparsify_rate: float) -> np.ndarray:
+    data_dir: Path = Path(data_dir)
+    new_dir = data_dir.parent / (data_dir.name + '_sparse')
+    os.makedirs(new_dir, exist_ok=True)
+
+    file_paths = glob.glob(f"{data_dir}/*.h5")
+    mask = AutoEncoderVertex24x6SparseDataset.compute_mask(sparsify_rate)
+    with tqdm(total=len(file_paths)) as prog:
+        for file_path in file_paths:
+            vertex = AutoEncoderVertex24x6Dataset.load_from_file(file_path)
+
+            # reshape to a 24^6 matrix
+            vertex_convert = AutoEncoderVertex24x6SparseDataset.to_sparse(vertex, mask)
             
+            # store new vertex to disk
+            file_name = Path(file_path).name
+            with h5py.File(new_dir / file_name, 'w') as file:
+                file.create_dataset("V/step0", data=vertex_convert, compression='lzf')
             prog.update()

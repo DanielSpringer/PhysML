@@ -72,9 +72,10 @@ class VertexTrainer24x6(VertexTrainer, BaseTrainer[Vertex24x6Config, AutoEncoder
         self.dataset: AutoEncoderVertex24x6Dataset = self.dataset
         self.config: Vertex24x6Config = self.config
 
-    def predict_3d(self, vertex_path: str, new_vertex: np.ndarray|None = None, 
+    def predict_3d(self, vertex_path: str, new_vertex: np.ndarray|None = None, train_mode: TrainerModes|None = None, 
                    load_from: Literal['best', 'last']|str|None = None, encode_only: bool = False) -> np.ndarray:
-        pred = self.predict(vertex_path, new_vertex, load_from, encode_only)
+        vertex = self.dataset.to_6d_vertex(new_vertex)
+        pred = self.predict(vertex_path, vertex, train_mode, load_from, encode_only)
         return self.dataset.to_3d_vertex(pred)
     
     def _predict_slice(self, vertex_path: str, fixed_idcs: list[int], other_k: int, dim: int, 
@@ -140,7 +141,9 @@ class VertexTrainer24x6(VertexTrainer, BaseTrainer[Vertex24x6Config, AutoEncoder
         return self._load_npy('prediction_slices', save_path, file_name)
 
 
-class VertexTrainer24x6Sparse(VertexTrainer24x6):
+class VertexTrainer24x6Sparse(VertexTrainer24x6, BaseTrainer[Vertex24x6SparseConfig, 
+                                                             AutoEncoderVertex24x6SparseDataset, 
+                                                             VertexWrapper24x6Sparse]):
     def __init__(self, project_name: str, config_name: str | None = None, 
                  subconfig_name: str|None = None, load_from: str|None = None, config_dir: str = 'configs', 
                  config_kwargs: dict[str, Any] = {}):

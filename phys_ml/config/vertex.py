@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from . import Config
@@ -7,6 +8,7 @@ if TYPE_CHECKING:
     from .. import wrapper, models, load_data
 
 
+@dataclass
 class VertexConfig(Config['models.AutoEncoderVertex','wrapper.VertexWrapper', 
                           'load_data.AutoEncoderVertexDataset']):
     construction_axis: int = 3
@@ -28,6 +30,7 @@ class VertexConfig(Config['models.AutoEncoderVertex','wrapper.VertexWrapper',
         self._predict_dataset = value
 
 
+@dataclass
 class Vertex24x6Config(VertexConfig, Config['models.AutoEncoderVertex','wrapper.VertexWrapper24x6', 
                                             'load_data.AutoEncoderVertex24x6Dataset']):
     sample_count_per_vertex: int = 2000
@@ -37,8 +40,8 @@ class Vertex24x6Config(VertexConfig, Config['models.AutoEncoderVertex','wrapper.
     _predict_dataset: str = 'PredictVertex24x6Dataset'
 
 
+@dataclass
 class Vertex24x6SparseConfig(Vertex24x6Config):
     sparsify_rate: int = 0.8
     _model_wrapper: str = 'VertexWrapper24x6Sparse'
     _dataset: str = 'AutoEncoderVertex24x6SparseDataset'
-    _predict_dataset: str = 'PredictVertex24x6SparseDataset'
