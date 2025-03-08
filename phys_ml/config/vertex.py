@@ -38,10 +38,3 @@ class Vertex24x6Config(VertexConfig, Config['models.AutoEncoderVertex','wrapper.
     _model_wrapper: str = 'VertexWrapper24x6'
     _dataset: str = 'AutoEncoderVertex24x6Dataset'
     _predict_dataset: str = 'PredictVertex24x6Dataset'
-
-
-@dataclass
-class Vertex24x6SparseConfig(Vertex24x6Config):
-    sparsify_rate: int = 0.8
-    _model_wrapper: str = 'VertexWrapper24x6Sparse'
-    _dataset: str = 'AutoEncoderVertex24x6SparseDataset'

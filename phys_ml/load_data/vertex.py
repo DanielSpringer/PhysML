@@ -3,7 +3,6 @@ import os
 import random
 
 from copy import deepcopy
-from collections.abc import Callable
 from pathlib import Path
 
 import h5py
@@ -153,51 +152,6 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
         return vertex.reshape((AutoEncoderVertexDataset.length,) * cls.k_dim, order='F')
 
 
-class AutoEncoderVertex24x6SparseDataset(AutoEncoderVertex24x6Dataset):
-    def __init__(self, config: Vertex24x6SparseConfig):
-        super().__init__(config)
-
-    @classmethod
-    def compute_mask(cls, sparsify_rate: float) -> np.ndarray:
-        vertex_size = cls.length**cls.dim
-        p = 1. * np.arange(vertex_size) / (vertex_size - 1)
-        return p > sparsify_rate
-
-    @classmethod
-    def get_vector_from_vertex(cls, vertex: np.ndarray, k1x: int, k1y: int, k2x: int, k2y: int, 
-                               k3x: int, k3y: int) -> np.ndarray:
-        dim_idcs = np.repeat(np.arange(cls.dim), cls.length)
-        pos_idcs = np.tile(np.arange(cls.length), cls.dim)
-        full_vector = np.array(AutoEncoderVertex24x6Dataset.get_vector_from_vertex(vertex, k1x, k1y, k2x, 
-                                                                                   k2y, k3x, k3y))
-        mask = ~np.isnan(full_vector)
-        dim_idcs = dim_idcs[mask]
-        pos_idcs = pos_idcs[mask]
-        full_vector = full_vector[mask]
-        input_vector = np.array([dim_idcs, pos_idcs, full_vector]).T.ravel()
-        return input_vector
-    
-    def construct_targets(self) -> torch.Tensor:
-        axis = self.config.construction_axis
-        assert axis <= self.dim, f"Axis must be in range [1,{self.dim}]"
-        idx_range = slice(3 * self.length * (self.dim - axis), 3 * self.length * (self.dim - axis + 1))
-        target_vector = deepcopy(self.data_in_slices[:, idx_range])
-        return target_vector
-    
-    @classmethod
-    def sparse_to_full_vector(cls, sparse_vector: np.ndarray) -> np.ndarray:
-        vector = np.zeros(cls.dim * cls.length)
-        for v in sparse_vector.reshape((cls.length, cls.dim)):
-            vector[v[0] * cls.length + v[1]] = v[2]
-        return vector
-    
-    @classmethod
-    def to_sparse(cls, vertex: np.ndarray, mask: np.ndarray) -> np.ndarray:
-        cutoff = np.sort(vertex.flatten())[mask].min()
-        vertex[vertex < cutoff] = 0.0
-        return vertex
-
-
 class PredictVertexDataset(AutoEncoderVertexDataset):
     def __init__(self, config: VertexConfig, vertex_path: str|None = None, vertex: np.ndarray|None = None):
         assert vertex_path or vertex is not None, "Either vertex_path or vertex must be provided."
@@ -293,32 +247,6 @@ def convert_3d_to_6d_vertex(data_dir: str) -> np.ndarray:
 
             # reshape to a 24^6 matrix
             vertex_convert = vertex.reshape((n_freq,) * dim)
-            
-            # store new vertex to disk
-            file_name = Path(file_path).name
-            with h5py.File(new_dir / file_name, 'w') as file:
-                file.create_dataset("V/step0", data=vertex_convert, compression='lzf')
-            prog.update()
-
-
-# run with:
-# ```
-# cd <...>/PhysML
-# python -c "from phys_ml.load_data import vertex;vertex.convert_6d_to_sparse_vertex('../frgs', sparsify_rate)"
-# ```
-def convert_6d_to_sparse_vertex(data_dir: str, sparsify_rate: float) -> np.ndarray:
-    data_dir: Path = Path(data_dir)
-    new_dir = data_dir.parent / (data_dir.name + '_sparse')
-    os.makedirs(new_dir, exist_ok=True)
-
-    file_paths = glob.glob(f"{data_dir}/*.h5")
-    mask = AutoEncoderVertex24x6SparseDataset.compute_mask(sparsify_rate)
-    with tqdm(total=len(file_paths)) as prog:
-        for file_path in file_paths:
-            vertex = AutoEncoderVertex24x6Dataset.load_from_file(file_path)
-
-            # reshape to a 24^6 matrix
-            vertex_convert = AutoEncoderVertex24x6SparseDataset.to_sparse(vertex, mask)
             
             # store new vertex to disk
             file_name = Path(file_path).name

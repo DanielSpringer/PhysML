@@ -139,16 +139,3 @@ class VertexTrainer24x6(VertexTrainer, BaseTrainer[Vertex24x6Config, AutoEncoder
     def load_prediction_slice(self, save_path: str|None = None, 
                               file_name: str|None = None) -> np.ndarray|None:
         return self._load_npy('prediction_slices', save_path, file_name)
-
-
-class VertexTrainer24x6Sparse(VertexTrainer24x6, BaseTrainer[Vertex24x6SparseConfig, 
-                                                             AutoEncoderVertex24x6SparseDataset, 
-                                                             VertexWrapper24x6Sparse]):
-    def __init__(self, project_name: str, config_name: str | None = None, 
-                 subconfig_name: str|None = None, load_from: str|None = None, config_dir: str = 'configs', 
-                 config_kwargs: dict[str, Any] = {}):
-        self.config_cls = Vertex24x6SparseConfig
-        super().__init__(project_name, config_name, subconfig_name, load_from, config_dir, 
-                         config_kwargs)
-        self.dataset: AutoEncoderVertex24x6SparseDataset = self.dataset
-        self.config: Vertex24x6SparseConfig = self.config
