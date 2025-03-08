@@ -42,3 +42,44 @@ class AutoEncoderVertex(BaseModule[VertexConfig]):
     def decode(self, data_in) -> torch.Tensor:
         x = self.decoder(data_in)
         return x
+
+
+class UNetVertex(BaseModule[VertexConfig]):
+    def __init__(self, config: VertexConfig, in_dim: int):
+        super().__init__(config, in_dim)
+        self.matrix_dim = config.matrix_dim
+        
+        self.embedding = nn.Sequential(
+            nn.Linear(in_dim, config.hidden_dims[0])
+        )
+
+        self.encoder_layers = [m for i in range(len(config.hidden_dims) - 1) for m in 
+                               (self.activation, nn.Linear(config.hidden_dims[i], config.hidden_dims[i + 1]))]
+        
+        decoder_dims = config.hidden_dims[1:][::-1]
+        self.decoder_layers = [m for i in range(len(decoder_dims) - 1) for m in 
+                               (self.activation, nn.Linear(decoder_dims[i], decoder_dims[i + 1]))]
+        self.out = nn.Linear(decoder_dims[-1], config.out_dim)
+        
+    def encode(self, data_in) -> list[torch.Tensor]:
+        x = self.embedding(data_in)
+        encodings = [x]
+        for activation, layer in self.encoder_layers:
+            x = activation(x)
+            x = layer(x)
+            encodings.append(x)
+        return encodings
+
+    def decode(self, data_in, encodings: list[torch.Tensor]) -> torch.Tensor:
+        x = data_in
+        for activation, layer in self.decoder_layers:
+            x = activation(x)
+            x = layer(torch.cat([encodings.pop(), x], axis=1))
+        x = self.out(x)
+        return x
+    
+    def forward(self, data_in) -> torch.Tensor:
+        encodings = self.encode(data_in)
+        x = encodings.pop()
+        x = self.decode(x, encodings)
+        return x
