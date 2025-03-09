@@ -1,4 +1,4 @@
-# LuttingerWard_from_ML
+# PHYSML
 
 ## Usage
 ### Setup environment
