@@ -39,7 +39,7 @@ class PhaseClassification:
         self.device = self.vertex_trainer.get_device_from_accelerator(self.vertex_trainer.config.device_type)
         self.random_idx_generator = random.Random(seed)
         self.models = [
-            svm.SVC(verbose=True, random_state=seed + 1), 
+            #svm.SVC(verbose=True, random_state=seed + 1), 
             ensemble.RandomForestClassifier(n_jobs=-1, verbose=1, random_state=seed + 2),
         ]
         self.load_models()
@@ -83,7 +83,7 @@ class PhaseClassification:
         inputs, targets, self.predict_samples = self.load_data()
         for model in tqdm(self.models, desc='Fit models'):
             model.fit(inputs, targets)
-            with open(f'models/{model.__class__.__qualname__}.pkl','wb') as f:
+            with open(f'{model.__class__.__qualname__}.pkl','wb') as f:
                 pickle.dump(model,f)
 
     def load_models(self):
@@ -92,10 +92,11 @@ class PhaseClassification:
                 check_is_fitted(model)
             except:
                 try:
-                    with open(f'models/{model.__class__.__qualname__}.pkl', 'rb') as f:
+                    with open(f'{model.__class__.__qualname__}.pkl', 'rb') as f:
                         self.models[i] = pickle.load(f)
                 except:
-                    raise ValueError(f'Model {model.__class__.__qualname__} is not fitted and could not be loaded.')
+                    print(f'Model {model.__class__.__qualname__} is not fitted and could not be loaded. '
+                          'Call train() before using the PhaseClassifier.')
 
     def evaluate_model(self, model, test_ls_vectors: np.ndarray, test_targets: np.ndarray,
                     print_conf_mat: bool = True) -> tuple[dict[str, float], np.ndarray]:
@@ -106,7 +107,7 @@ class PhaseClassification:
             'rec': metrics.recall_score(test_targets, pred, average='micro'),
             'f1': metrics.f1_score(test_targets, pred, average='micro'),
         }
-        conf_mat = metrics.confusion_matrix(test_targets, pred, normalize='all')
+        conf_mat = metrics.confusion_matrix(test_targets, pred, normalize='pred')
         if print_conf_mat:
             #conf_disp = metrics.ConfusionMatrixDisplay(confusion_matrix=conf_mat)
             #conf_disp.plot(cmap=plt.cm.PiYG, values_format=".2f")  # vanimo, coolwarm
@@ -119,15 +120,16 @@ class PhaseClassification:
         if not self.predict_samples:
             _, _, self.predict_samples = self.load_data(predict_only=True)
         
-        # using new samples from known vertices:
-        known_vertices = {}
-        for model in tqdm(self.models, desc='Predict with sampling from known vertices'):
-            scores, conf_mat = self.evaluate_model(model, *self.predict_samples, print_conf_mat)
-            known_vertices[model.__class__.__qualname__] = (scores, conf_mat)
+        # # using new samples from known vertices:
+        # known_vertices = {}
+        # for model in tqdm(self.models, desc='Predict with sampling from known vertices'):
+        #     scores, conf_mat = self.evaluate_model(model, *self.predict_samples, print_conf_mat)
+        #     known_vertices[model.__class__.__qualname__] = (scores, conf_mat)
         
         # using samples from new vertex:
         new_vertices = {}
-        for model in tqdm(self.models, desc='Predict with sampling from new vertices'):
+        # for model in tqdm(self.models, desc='Predict with sampling from new vertices'):
+        for model in tqdm(self.models, desc='Predict'):
             inputs = np.empty((0, self.ls_length))
             targets = []
             for fp in tqdm(self.predict_paths, desc='Load data', leave=False):
@@ -141,4 +143,5 @@ class PhaseClassification:
                 targets.extend([phase] * self.samples_per_vertex)
             scores, conf_mat = self.evaluate_model(model, inputs, targets, print_conf_mat)
             new_vertices[model.__class__.__qualname__] = (scores, conf_mat)
-        return {'sampling from new vertices': new_vertices, 'sampling from known vertices': known_vertices}
+        # return {'sampling from new vertices': new_vertices, 'sampling from known vertices': known_vertices}
+        return new_vertices

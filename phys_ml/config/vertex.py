@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from . import Config
 
@@ -15,6 +15,8 @@ class VertexConfig(Config['models.AutoEncoderVertex','wrapper.VertexWrapper',
     sample_count_per_vertex: int = 2000
     positional_encoding: bool = False
     matrix_dim = 3
+    subset_type: Literal['phase', 'sc', 'afm', 'fm']|None|list[str] = 'afm'  # `phase`: select subset from each phase
+                                                                             # other str or list of str: only select given phases
 
     model_name: str = 'AutoEncoderVertex'
     _model_wrapper: str = 'VertexWrapper'

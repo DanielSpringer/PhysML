@@ -3,4 +3,4 @@
 __pycache__
 slurm-*.out
 .ipynb_checkpoints/
-/notebooks/vertex/models/*
+/notebooks/vertex/**/models

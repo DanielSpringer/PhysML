@@ -49,31 +49,29 @@ class UNetVertex(BaseModule[VertexConfig]):
         super().__init__(config, in_dim)
         self.matrix_dim = config.matrix_dim
         
-        self.embedding = nn.Sequential(
-            nn.Linear(in_dim, config.hidden_dims[0])
-        )
+        self.embedding = nn.Linear(in_dim, config.hidden_dims[0])
 
-        self.encoder_layers = [m for i in range(len(config.hidden_dims) - 1) for m in 
-                               (self.activation, nn.Linear(config.hidden_dims[i], config.hidden_dims[i + 1]))]
+        self.encoder_layers = nn.ModuleList([nn.Linear(config.hidden_dims[i], config.hidden_dims[i + 1]) 
+                                             for i in range(len(config.hidden_dims) - 1)])
         
         decoder_dims = config.hidden_dims[1:][::-1]
-        self.decoder_layers = [m for i in range(len(decoder_dims) - 1) for m in 
-                               (self.activation, nn.Linear(decoder_dims[i], decoder_dims[i + 1]))]
+        self.decoder_layers = nn.ModuleList([nn.Linear(decoder_dims[i], decoder_dims[i + 1]) 
+                                             for i in range(len(decoder_dims) - 1)])
         self.out = nn.Linear(decoder_dims[-1], config.out_dim)
         
     def encode(self, data_in) -> list[torch.Tensor]:
         x = self.embedding(data_in)
         encodings = [x]
-        for activation, layer in self.encoder_layers:
-            x = activation(x)
+        for layer in self.encoder_layers:
+            x = self.activation(x)
             x = layer(x)
             encodings.append(x)
         return encodings
 
-    def decode(self, data_in, encodings: list[torch.Tensor]) -> torch.Tensor:
+    def decode(self, data_in, encodings: list[torch.Tensor]) -> torch.Tensor: 
         x = data_in
-        for activation, layer in self.decoder_layers:
-            x = activation(x)
+        for layer in self.decoder_layers:
+            x = self.activation(x)
             x = layer(torch.cat([encodings.pop(), x], axis=1))
         x = self.out(x)
         return x
