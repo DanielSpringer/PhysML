@@ -3,6 +3,7 @@ import nest_asyncio
 import glob
 import os
 import pickle
+import re
 
 import numpy as np
 
@@ -177,9 +178,10 @@ def backup_info(info_fn: str) -> None:
     # back_up existing info_files
     info_name = info_fn.split('.')[0]
     files = sorted(glob.glob(f'{info_name}*.pkl'))
+    files = [f for f in files if re.match(rf'{info_name}_?\d*.pkl', f)]
     if len(files) > 0:
-        last_i = files[-1].split('.')[0][-1] if len(files) > 1 else 0
-        os.rename(f'{info_name}.pkl', f'{info_name}{last_i + 1:02d}.pkl')
+        last_i = int(files[-1].split('.')[0].split('_')[-1]) if len(files) > 1 else 0
+        os.rename(f'{info_name}.pkl', f'{info_name}_{last_i + 1:02d}.pkl')
 
 
 def eval_train(trainer: VertexTrainer, info_dict: list[dict[str, Any]], info_filename: str, hidden_dims: list, 
