@@ -16,7 +16,7 @@ import torch
 from torch.utils.data import DataLoader, random_split
 
 from .. import config
-from ..load_data import FilebasedDataset
+from ..load_data import FilebasedDataset, SimpleDataset
 from ..wrapper import BaseWrapper
 
 
@@ -112,11 +112,6 @@ class BaseTrainer(Generic[T, S, R]):
         resume_from : Literal['last', 'best'] | str | None, optional
             Resume training from the last or best checkpoint or from a specific path. (defaults to None)
         """
-        # if resume_from := (resume_from or self.config.resume):
-        #     ckpt_path = self.get_model_ckpt(resume_from)
-        #     load_from = Path(ckpt_path).parents[1]
-        # else:
-        #     ckpt_path = load_from = None
         load_from = resume_from or self.config.resume
         ckpt_path = self.init_trainer(train_mode, load_from)
         self.pre_train()
@@ -147,7 +142,6 @@ class BaseTrainer(Generic[T, S, R]):
         
         ''' Train '''
         self.trainer.fit(self.wrapper, train_dataloader, validation_dataloader, ckpt_path=ckpt_path)
-        #self.trainer.fit(self.wrapper, ckpt_path=ckpt_path)
     
     def pre_train(self) -> None:
         """
@@ -186,10 +180,14 @@ class BaseTrainer(Generic[T, S, R]):
             new_data = self.dataset.load_from_file(new_data_path)
         if load_from:
             _ = self.load_model(load_from, predict=False)
-        self.wrapper.model.eval()
-        device = self.get_device_from_accelerator(self.config.device_type)
-        input = torch.tensor(new_data, dtype=torch.float32).to(device)
-        pred = self.wrapper(input).detach().numpy()
+        dataset = SimpleDataset(new_data)
+        dataloader = self.data_loader(dataset,batch_size=self.config.batch_size, 
+                                      num_workers=self.config.num_dataloader_workers, 
+                                      persistent_workers=bool(self.config.num_dataloader_workers),
+                                      pin_memory=True)
+        pred = self.trainer.predict(self.wrapper, dataloader, ckpt_path=load_from)
+        pred = torch.concat(pred, dim=0)
+        pred = pred.cpu().numpy()
         self.save_prediction(pred, Path(new_data_path).stem, 'predictions')
         return pred
     
