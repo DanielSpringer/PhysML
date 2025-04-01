@@ -211,24 +211,6 @@ class NeuralNetClassifier:
         def forward(self, data_in) -> torch.Tensor:
             return self.layers(data_in)
     
-    # class Dataset(torch.utils.data.Dataset):
-    #     def __init__(self, inputs: np.ndarray, targets: list[int|float]|None = None):
-    #         self.inputs = torch.tensor(inputs, dtype=torch.float32)
-    #         if targets is not None:
-    #             if isinstance(targets[0], int):
-    #                 self.targets = torch.tensor(targets, dtype=torch.long)
-    #             else:
-    #                 self.targets = torch.tensor(targets, dtype=torch.float32)
-            
-    #     def __len__(self):
-    #         return len(self.inputs)
-        
-    #     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-    #         if hasattr(self, 'targets'):
-    #             return self.inputs[idx], self.targets[idx]
-    #         else:
-    #             return self.inputs[idx]
-    
     class Wrapper(LightningModule):
         def __init__(self, criterion: torch.nn, optimizer: type[torch.optim.Optimizer], 
                      in_dim: int, hidden_dims: list[int], out_dim: int = 3, learning_rate: float = 1e-3, 
@@ -286,10 +268,10 @@ class NeuralNetClassifier:
         self.seed = seed
         self.is_fitted = False
 
-        strategy = 'ddp_notebook' if os.name == 'posix' else 'auto'
+        torch.set_float32_matmul_precision('high')
         callbacks = [ModelCheckpoint(save_top_k=1, monitor='val_loss', mode='min', verbose=False, save_last=False), 
                      EarlyStopping(monitor='val_loss', mode='min', patience=10, verbose=False)]
-        self.trainer = Trainer(strategy=strategy, plugins=[LightningEnvironment()], max_epochs=self.max_epochs, 
+        self.trainer = Trainer(strategy='auto', plugins=[LightningEnvironment()], max_epochs=self.max_epochs, 
                                accelerator=self.device_type, devices=self.num_devices, callbacks=callbacks)
         self.wrapper = self.Wrapper(criterion, optimizer, in_dim, hidden_dims, out_dim, learning_rate, weight_decay)
 
