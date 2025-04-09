@@ -33,60 +33,6 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         self.file_paths = None
 
         # Subsample files
-        # subset_type = config.subset_type
-        # random.seed(config.subset_seed)
-        # file_paths = glob.glob(f"{config.path_train}/*.h5")
-        
-        # if subset_type and subset_type != 'phase':
-        #     # select only vertices for certain phases
-        #     if isinstance(subset_type, str):
-        #         subset_type = [subset_type]
-        #     fps = []
-        #     for fp in file_paths:
-        #         tp = float(Path(fp).stem[2:6])
-        #         for phase in subset_type:
-        #             borders = self.phase_borders[phase]
-        #             if tp >= borders[0] and tp < borders[1]:
-        #                 fps.append(fp)
-        #                 break
-        #     file_paths = fps
-
-        # if config.subset is not None and config.subset != 0:
-        #     if subset_type == 'phase':
-        #         # select subset from each phase
-        #         fps_by_phase = [[], [], []]
-        #         for fp in file_paths:
-        #             tp = float(Path(fp).stem[2:6])
-        #             for i, phase in enumerate(['sc', 'afm', 'fm']):
-        #                 borders = self.phase_borders[phase]
-        #                 if tp >= borders[0] and tp < borders[1]:
-        #                     fps_by_phase[i].append(fp)
-        #                     break
-                
-        #         file_paths = []
-        #         for phase_fps in fps_by_phase:
-        #             n_files = len(phase_fps)
-        #             subset = config.subset
-        #             if type(subset) == float:
-        #                 subset = int(round(n_files * config.subset, 0))
-        #             if subset < n_files:
-        #                 if subset < 0:
-        #                     subset = n_files + subset
-        #                 fps = (random.sample(phase_fps, max(subset, 1)) if config.subset_shuffle 
-        #                         else phase_fps[:subset])
-        #                 file_paths.extend(fps)
-        #             else:
-        #                 file_paths.extend(phase_fps)
-        #     else:
-        #         n_files = len(file_paths)
-        #         if type(config.subset) == float:
-        #             config.subset = int(round(n_files * config.subset, 0))
-        #         if config.subset < n_files:
-        #             if config.subset < 0:
-        #                 config.subset = n_files + config.subset
-        #             file_paths = (random.sample(file_paths, max(config.subset, 1)) if config.subset_shuffle 
-        #                             else file_paths[:config.subset])
-        # self.file_paths = file_paths
         self.file_paths, config.subset = self.get_filepaths(config.path_train, config.subset, config.subset_shuffle, 
                                                             config.subset_seed, config.subset_type)
         
