@@ -33,60 +33,6 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         self.file_paths = None
 
         # Subsample files
-        # subset_type = config.subset_type
-        # random.seed(config.subset_seed)
-        # file_paths = glob.glob(f"{config.path_train}/*.h5")
-        
-        # if subset_type and subset_type != 'phase':
-        #     # select only vertices for certain phases
-        #     if isinstance(subset_type, str):
-        #         subset_type = [subset_type]
-        #     fps = []
-        #     for fp in file_paths:
-        #         tp = float(Path(fp).stem[2:6])
-        #         for phase in subset_type:
-        #             borders = self.phase_borders[phase]
-        #             if tp >= borders[0] and tp < borders[1]:
-        #                 fps.append(fp)
-        #                 break
-        #     file_paths = fps
-
-        # if config.subset is not None and config.subset != 0:
-        #     if subset_type == 'phase':
-        #         # select subset from each phase
-        #         fps_by_phase = [[], [], []]
-        #         for fp in file_paths:
-        #             tp = float(Path(fp).stem[2:6])
-        #             for i, phase in enumerate(['sc', 'afm', 'fm']):
-        #                 borders = self.phase_borders[phase]
-        #                 if tp >= borders[0] and tp < borders[1]:
-        #                     fps_by_phase[i].append(fp)
-        #                     break
-                
-        #         file_paths = []
-        #         for phase_fps in fps_by_phase:
-        #             n_files = len(phase_fps)
-        #             subset = config.subset
-        #             if type(subset) == float:
-        #                 subset = int(round(n_files * config.subset, 0))
-        #             if subset < n_files:
-        #                 if subset < 0:
-        #                     subset = n_files + subset
-        #                 fps = (random.sample(phase_fps, max(subset, 1)) if config.subset_shuffle 
-        #                         else phase_fps[:subset])
-        #                 file_paths.extend(fps)
-        #             else:
-        #                 file_paths.extend(phase_fps)
-        #     else:
-        #         n_files = len(file_paths)
-        #         if type(config.subset) == float:
-        #             config.subset = int(round(n_files * config.subset, 0))
-        #         if config.subset < n_files:
-        #             if config.subset < 0:
-        #                 config.subset = n_files + config.subset
-        #             file_paths = (random.sample(file_paths, max(config.subset, 1)) if config.subset_shuffle 
-        #                             else file_paths[:config.subset])
-        # self.file_paths = file_paths
         self.file_paths, config.subset = self.get_filepaths(config.path_train, config.subset, config.subset_shuffle, 
                                                             config.subset_seed, config.subset_type)
         
@@ -210,7 +156,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        return self.data_in_indices[idx], self.data_in_slices[idx], self.data_target[idx]
+        return self.data_in_slices[idx], self.data_in_indices[idx], self.data_target[idx]
 
     @staticmethod
     def load_from_file(path: str) -> np.ndarray:
@@ -253,6 +199,90 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
         return vertex.reshape((AutoEncoderVertexDataset.length,) * cls.k_dim, order='F')
 
 
+class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
+    def __init__(self, config: VertexConfig):
+        FilebasedDataset.__init__(self, config)
+        config.matrix_dim = self.dim
+
+        # Subsample files
+        self.file_paths_by_phase, config.subset = self.get_filepaths(config.path_train, config.subset, config.subset_shuffle, 
+                                                                     config.subset_seed, config.subset_type)
+        
+        # Iterate through all files in given directory
+        self.input_indices = torch.tensor([])
+        self.input_vectors = torch.tensor([])
+        self.phases = []
+        for phase, file_paths in self.file_paths_by_phase.items():
+            for file_path in file_paths:
+                # Get vertex and create slices in each of the 3 dimensions
+                vertex = self.load_from_file(file_path)
+
+                # sample random indices of a 576^3 matrix and merge all rows through the sampled indices
+                random.seed(config.sample_seed)
+                merged_slices, indices = self.sample(vertex, config.sample_count_per_vertex, config=config)
+            
+                # Append result to data_in
+                self.input_vectors = torch.cat([self.input_vectors, 
+                                                torch.tensor(merged_slices, dtype=torch.float32)], axis=0)
+                self.input_indices = torch.cat([self.input_indices, 
+                                                torch.tensor(indices, dtype=torch.float32)], axis=0)
+                self.phases.extend([phase] * len(merged_slices))
+        self.phases = np.array(self.phases)
+        self.phases_dict = {phase: np.nonzero(self.phases == phase)[0] for phase in self.file_paths_by_phase.keys()}
+        self.targets = self.construct_targets(self.input_vectors)
+    
+    @classmethod
+    def get_filepaths(cls, data_dir: str, subset: int|float|None, subset_shuffle: bool = True, subset_seed: int = 42,
+                      subset_type: Literal['afm', 'sc', 'fm']|list[str]|None = None) -> tuple[dict[str, list[str]], int]:
+        # Subsample files
+        random.seed(subset_seed)
+        file_paths = glob.glob(f"{data_dir}/*.h5")
+        if subset_type is None:
+            subset_type = ['afm', 'sc', 'fm']
+        fps_by_phase = {phase: [] for phase in subset_type}
+        for fp in file_paths:
+            tp = float(Path(fp).stem[2:6])
+            for phase in fps_by_phase.keys():
+                borders = cls.phase_borders[phase]
+                if tp >= borders[0] and tp < borders[1]:
+                    fps_by_phase[phase].append(fp)
+                    break
+
+        if subset is not None and subset != 0:
+            # select subset of each phase
+            for phase, fps in fps_by_phase.items():
+                n_files = len(fps)
+                if type(subset) == float:
+                    subset = int(round(n_files * subset, 0))
+                if subset < n_files:
+                    if subset < 0:
+                        subset = n_files + subset
+                    fps = (random.sample(fps, max(subset, 1)) if subset_shuffle 
+                            else fps[:subset])
+                    fps_by_phase[phase] = fps 
+        return fps_by_phase, subset
+    
+    def construct_targets(self, input_vectors: torch.Tensor) -> torch.Tensor:
+        axis = self.config.construction_axis
+        assert axis <= self.dim, f"Axis must be in range [1,{self.dim}]"
+        idx_range = slice(self.length * (self.dim - axis), self.length * (self.dim - axis + 1))
+        targets = deepcopy(input_vectors[:, idx_range])
+        assert list(targets[0]) == list(input_vectors[0][idx_range])
+        return targets
+    
+    def __len__(self):
+        return self.input_vectors.shape[0]
+
+    def __getitem__(self, idx: int):
+        """ Return tuple of (sample, positive_match, negative_matches, index, target) """
+        phase = self.phases[idx]
+        neg_phases = [key for key in self.file_paths_by_phase.keys() if key != phase]
+        positive_match = self.targets[np.random.choice(self.phases_dict[phase], size=1)[0]]
+        #negative_matches = np.array([self.targets[np.random.choice(self.phases_dict[p], size=1)[0]] for p in neg_phases])
+        negative_matches = np.array([positive_match for p in neg_phases])
+        return self.input_vectors[idx], positive_match, negative_matches, self.input_indices[idx], self.targets[idx]
+
+
 class PredictVertexDataset(AutoEncoderVertexDataset):
     def __init__(self, config: VertexConfig, vertex_path: str|None = None, vertex: np.ndarray|None = None):
         assert vertex_path or vertex is not None, "Either vertex_path or vertex must be provided."
@@ -280,7 +310,7 @@ class PredictVertexDataset(AutoEncoderVertexDataset):
     def __len__(self):
         return self.length ** (self.dim - 1)
     
-    def __getitem__(self, idx) -> tuple[torch.Tensor, list[int]]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, list[int]]:
         idcs, random_idx = self._get_initial_indices(idx)
         idcs.insert(self.axis - 1, random_idx)
         inputs = self._create_input_vector(idcs)
@@ -309,7 +339,7 @@ class PredictVertex24x6Dataset(PredictVertexDataset, AutoEncoderVertex24x6Datase
     def __len__(self):
         return PredictVertexDataset.__len__(self)
     
-    def __getitem__(self, idx) -> tuple[torch.Tensor, list[int]]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, list[int]]:
         idcs, random_idx = self._get_initial_indices(idx)
         if self.dim in [3, 6]:
             idcs.insert(self.axis - 1, random_idx)

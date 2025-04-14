@@ -1,4 +1,5 @@
 h5py == 3.12.1
+info-nce-pytorch == 0.1.4
 lightning == 2.4.0
 matplotlib == 3.10.0
 numpy == 1.26.4

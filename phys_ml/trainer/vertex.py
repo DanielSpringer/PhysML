@@ -18,10 +18,6 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
                          config_kwargs)
         torch.set_float32_matmul_precision('high')
     
-    @property
-    def input_size(self) -> int:
-        return self.dataset[0][1].shape[0]
-    
     def predict(self, vertex_path: str, new_vertex: np.ndarray|None = None, train_mode: TrainerModes|None = None, 
                 load_from: Literal['best', 'last']|str|None = None, encode_only: bool = False):
         dataset = self.config.predict_dataset(self.config, vertex_path, new_vertex)
