@@ -208,27 +208,34 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
         self.file_paths_by_phase, config.subset = self.get_filepaths(config.path_train, config.subset, config.subset_shuffle, 
                                                                      config.subset_seed, config.subset_type)
         
-        # Iterate through all files in given directory
+        # load and sample from vertices
         self.input_indices = torch.tensor([])
         self.input_vectors = torch.tensor([])
-        self.phases = []
-        for phase, file_paths in self.file_paths_by_phase.items():
-            for file_path in file_paths:
-                # Get vertex and create slices in each of the 3 dimensions
-                vertex = self.load_from_file(file_path)
+        for phases_fps in zip(*self.file_paths_by_phase.values()):
+            # phases_fps <- 1 file path for each phase
+            random.seed(config.sample_seed)
+            vertices = [self.load_from_file(fp) for fp in phases_fps]  # load 1 vertex from each phase
+            for i, vertex in vertices:
+                # prepare a 4-sample for each vertex as input-part
+                other_vertices = vertices[(i + 1) % len(vertices)] + vertices[(i + 2) % len(vertices)]
+                input_samples, input_idcs = self.sample(vertex, config.sample_count_per_vertex)
+                pos_idcs = input_idcs.copy()
+                pos_idcs[:, -1] = (pos_idcs[:, -1] + 1) % self.n_freq
+                pos_samples = [self.get_vector_from_vertex(vertex, *idcs) for idcs in pos_idcs]
+                neg1_samples = [self.get_vector_from_vertex(other_vertices[0], *idcs) for idcs in input_idcs]
+                neg2_samples = [self.get_vector_from_vertex(other_vertices[1], *idcs) for idcs in input_idcs]
 
-                # sample random indices of a 576^3 matrix and merge all rows through the sampled indices
-                random.seed(config.sample_seed)
-                merged_slices, indices = self.sample(vertex, config.sample_count_per_vertex, config=config)
-            
-                # Append result to data_in
-                self.input_vectors = torch.cat([self.input_vectors, 
-                                                torch.tensor(merged_slices, dtype=torch.float32)], axis=0)
-                self.input_indices = torch.cat([self.input_indices, 
-                                                torch.tensor(indices, dtype=torch.float32)], axis=0)
-                self.phases.extend([phase] * len(merged_slices))
-        self.phases = np.array(self.phases)
-        self.phases_dict = {phase: np.nonzero(self.phases == phase)[0] for phase in self.file_paths_by_phase.keys()}
+                # concatenate samples and indices cross-wise
+                samples = np.array([input_samples, pos_samples, neg1_samples, neg2_samples])
+                idcs = np.array([input_idcs, pos_idcs, input_idcs, input_idcs])
+                samples = samples.transpose(1, 0, 2)
+                idcs = idcs.transpose(1, 0, 2)
+                samples = np.concatenate(samples, axis=0)
+                idcs = np.concatenate(idcs, axis=0)
+                self.input_vectors = torch.cat([self.input_vectors,
+                                                torch.tensor(samples, dtype=torch.float32)], axis=0)
+                self.input_indices = torch.cat([self.input_indices,
+                                                torch.tensor(idcs, dtype=torch.float32)], axis=0)
         self.targets = self.construct_targets(self.input_vectors)
     
     @classmethod
@@ -259,8 +266,26 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
                         subset = n_files + subset
                     fps = (random.sample(fps, max(subset, 1)) if subset_shuffle 
                             else fps[:subset])
-                    fps_by_phase[phase] = fps 
+                    fps_by_phase[phase] = fps
+        
+        # extend lists of file_paths to same length for each phase by random sampling 
+        n_fps = max([len(fps) for fps in fps_by_phase.values()])
+        for phase, fps in fps_by_phase.items():
+            n = len(fps)
+            if n < n_fps:
+                fps_by_phase[phase] += random.choices(fps, k=(n_fps - n))
         return fps_by_phase, subset
+    
+    @classmethod
+    def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int, 
+               **kwargs) -> tuple[list[list[float]], np.ndarray]:
+        cls.__new__(cls)
+        indices = random.sample(range(cls.length**cls.dim), sample_count_per_vertex)
+        indices = np.array([[(x // cls.length**i) % cls.length for i in range(cls.dim)] for x in indices])
+
+        # Create and merge all row combinations
+        merged_slices = [cls.get_vector_from_vertex(vertex, *idcs) for idcs in indices]
+        return merged_slices, indices
     
     def construct_targets(self, input_vectors: torch.Tensor) -> torch.Tensor:
         axis = self.config.construction_axis
@@ -275,12 +300,7 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
 
     def __getitem__(self, idx: int):
         """ Return tuple of (sample, positive_match, negative_matches, index, target) """
-        phase = self.phases[idx]
-        neg_phases = [key for key in self.file_paths_by_phase.keys() if key != phase]
-        positive_match = self.targets[np.random.choice(self.phases_dict[phase], size=1)[0]]
-        #negative_matches = np.array([self.targets[np.random.choice(self.phases_dict[p], size=1)[0]] for p in neg_phases])
-        negative_matches = np.array([positive_match for p in neg_phases])
-        return self.input_vectors[idx], positive_match, negative_matches, self.input_indices[idx], self.targets[idx]
+        return self.input_vectors[idx], self.input_indices[idx], self.targets[idx]
 
 
 class PredictVertexDataset(AutoEncoderVertexDataset):

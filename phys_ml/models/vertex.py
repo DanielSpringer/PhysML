@@ -44,6 +44,13 @@ class AutoEncoderVertex(BaseModule[VertexConfig]):
         return x
 
 
+class ContrastiveAutoEncoder(AutoEncoderVertex):
+    def forward(self, data_in) -> tuple[torch.Tensor, torch.Tensor]:
+        latent = self.encode(data_in)
+        recon = self.decode(latent)
+        return recon, latent
+
+
 class UNetVertex(BaseModule[VertexConfig]):
     def __init__(self, config: VertexConfig, in_dim: int):
         super().__init__(config, in_dim)

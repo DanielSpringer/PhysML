@@ -159,7 +159,7 @@ def evaluate_and_report(train_results: dict[str, Any], test_filename: str, train
                         load_func: Callable[...,np.ndarray]|None = None, 
                         **kwargs):
     assert nrows * ncols >= len(train_results) + 1, \
-        f"`{nrows=}`and `{ncols=}` not enough for {len(train_results + 1)} items to plot in `train_info` + target."
+        f"`{nrows=}`and `{ncols=}` not enough for {len(train_results) + 1} items to plot in `train_info` + target."
     
     results, target_slice = evaluate_all_models(train_results, test_filename, trainer, target, slice_at, axis, keys,
                                                 predict_func, load_func, **kwargs)
