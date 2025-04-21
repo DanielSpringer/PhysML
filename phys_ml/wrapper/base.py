@@ -4,8 +4,6 @@ import numpy as np
 import lightning as L
 import torch
 
-from torch.utils.data import DataLoader, random_split
-
 from ..config import Config
 from ..models import BaseModule
 

@@ -52,8 +52,6 @@ class VertexWrapper24x6InfoNCE(VertexWrapper24x6):
         self.nce = config.resolve_objectpath('info_nce.InfoNCE')(negative_mode='paired')
     
     def get_inputs_and_targets(self, batch: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        # flatten batch from shape(batch_size, 4, vector_length) to (batch_size * 4, vector_length)
-        batch = (b.reshape((b.shape[0] * b.shape[1], b.shape[2])) for b in batch)
         if self.positional_encoding:
             inputs = (batch[0], batch[1])
         else:
@@ -61,8 +59,8 @@ class VertexWrapper24x6InfoNCE(VertexWrapper24x6):
         return inputs, batch[2].float()
     
     def reshape_output(self, tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        tensor = tensor.reshape((tensor.shape[0] // 4, 4, tensor.shape[1])).transpose(1, 0, 2)
-        return tensor[0], tensor[1], tensor[2:].transpose(1, 0, 2)
+        tensor = tensor.reshape((tensor.shape[0] // 4, 4, tensor.shape[1])).transpose(1, 0)
+        return tensor[0], tensor[1], tensor[2:].transpose(1, 0)
     
     def step(self, batch: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         inputs, targets = self.get_inputs_and_targets(batch)
@@ -72,3 +70,15 @@ class VertexWrapper24x6InfoNCE(VertexWrapper24x6):
         rec_loss = self.criterion(recons, targets)
         loss = nce_loss + rec_loss
         return recons, targets, loss
+    
+    def predict_step(self, batch: tuple[torch.Tensor, torch.Tensor]):
+        inputs, idcs = batch
+        if self.encode_only:
+            pred = self.model.encode(inputs)
+            return pred
+        else:
+            pred, latent = self.model(inputs)
+            for i, p in enumerate(pred):
+                idx = [idx[i] for idx in idcs]
+                idx[self.replace_at] = slice(None)
+                self.pred_vertex[*idx] = p

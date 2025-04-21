@@ -10,7 +10,7 @@ import numpy as np
 
 import torch
 
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 
 from ..config.vertex import *
 from . import FilebasedDataset
@@ -205,19 +205,20 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
         config.matrix_dim = self.dim
 
         # Subsample files
-        self.file_paths_by_phase, config.subset = self.get_filepaths(config.path_train, config.subset, config.subset_shuffle, 
-                                                                     config.subset_seed, config.subset_type)
+        self.file_paths_by_phase, config.subset, n_fps = self.get_filepaths(config.path_train, config.subset, 
+                                                                            config.subset_shuffle, config.subset_seed, 
+                                                                            config.subset_type)
         
         # load and sample from vertices
         self.input_indices = torch.tensor([])
         self.input_vectors = torch.tensor([])
-        for phases_fps in zip(*self.file_paths_by_phase.values()):
+        for phases_fps in tqdm(zip(*self.file_paths_by_phase.values()), desc='Processing vertex files', total=n_fps):
             # phases_fps <- 1 file path for each phase
             random.seed(config.sample_seed)
-            vertices = [self.load_from_file(fp) for fp in phases_fps]  # load 1 vertex from each phase
-            for i, vertex in vertices:
+            vertices = [self.load_from_file(fp) for fp in tqdm(phases_fps, desc='Loading files', leave=False)]  # load 1 vertex from each phase
+            for i, vertex in tqdm(enumerate(vertices), desc='Sampling vertices', total=len(vertices), leave=False):
                 # prepare a 4-sample for each vertex as input-part
-                other_vertices = vertices[(i + 1) % len(vertices)] + vertices[(i + 2) % len(vertices)]
+                other_vertices = vertices[(i + 1) % len(vertices)], vertices[(i + 2) % len(vertices)]
                 input_samples, input_idcs = self.sample(vertex, config.sample_count_per_vertex)
                 pos_idcs = input_idcs.copy()
                 pos_idcs[:, -1] = (pos_idcs[:, -1] + 1) % self.n_freq
@@ -274,7 +275,7 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
             n = len(fps)
             if n < n_fps:
                 fps_by_phase[phase] += random.choices(fps, k=(n_fps - n))
-        return fps_by_phase, subset
+        return fps_by_phase, subset, n_fps
     
     @classmethod
     def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int, 
@@ -299,7 +300,6 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
         return self.input_vectors.shape[0]
 
     def __getitem__(self, idx: int):
-        """ Return tuple of (sample, positive_match, negative_matches, index, target) """
         return self.input_vectors[idx], self.input_indices[idx], self.targets[idx]
 
 
@@ -386,6 +386,8 @@ class PredictVertex24x6Dataset(PredictVertexDataset, AutoEncoderVertex24x6Datase
 # python -c "from phys_ml.load_data import vertex;vertex.convert_3d_to_6d_vertex('../frgs')"
 # ```
 def convert_3d_to_6d_vertex(data_dir: str) -> np.ndarray:
+    from tqdm import tqdm
+
     n_freq, dim = AutoEncoderVertexDataset.n_freq, 6
     data_dir: Path = Path(data_dir)
     new_dir = data_dir.parent / (data_dir.name + '_6d')
