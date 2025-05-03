@@ -1,4 +1,3 @@
-import os
 import pickle
 
 from pathlib import Path
@@ -141,7 +140,7 @@ class PhaseClassification:
                 ax.tick_params(left=False, bottom=False)
                 plt.xlabel('predicted')
                 plt.ylabel('true')
-                plt.title(repr(model))
+                plt.title(model.__class__.__name__)
                 plt.show()
             return scores, conf_mat
         except Exception as e:
