@@ -20,7 +20,7 @@ from tqdm.notebook import tqdm
 
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader
 
 from phys_ml.load_data.base import SimpleDataset
 from phys_ml.load_data.vertex import AutoEncoderVertex24x6Dataset
@@ -134,9 +134,10 @@ class PhaseClassification:
                 test_targets = labels[test_targets]
             conf_mat = metrics.confusion_matrix(test_targets, pred, labels=labels, normalize=normalize)
             if print_conf_mat:
+                sns.set_theme(font_scale=1.4)
                 fig, ax = plt.subplots(figsize=(6, 6))
                 ax = sns.heatmap(conf_mat, annot=True, xticklabels=labels, yticklabels=labels, 
-                                vmin=0.0, vmax=1.0, fmt=".2f", ax=ax, square=True)
+                                vmin=0.0, vmax=1.0, fmt=".2f", ax=ax, square=True, annot_kws={"size": 14})
                 ax.tick_params(left=False, bottom=False)
                 plt.xlabel('predicted')
                 plt.ylabel('true')
