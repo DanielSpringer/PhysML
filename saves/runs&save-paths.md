@@ -61,13 +61,13 @@ vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_3
 vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_3
 
 #### 04-3-2-2 using contrastive autoencoder (SC)
-vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-07/version_0
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-09/version_1
 
 #### 04-3-2-3 using contrastive autoencoder (AFM)
-vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-07/version_1
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-09/version_2
 
 #### 04-3-2-4 using contrastive autoencoder (FM)
-vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-07/version_2
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-09/version_3
 
 
 # 05 phase regression

@@ -260,13 +260,14 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
             # select subset of each phase
             for phase, fps in fps_by_phase.items():
                 n_files = len(fps)
-                if type(subset) == float:
-                    subset = int(round(n_files * subset, 0))
-                if subset < n_files:
-                    if subset < 0:
-                        subset = n_files + subset
-                    fps = (random.sample(fps, max(subset, 1)) if subset_shuffle 
-                            else fps[:subset])
+                phase_subset = subset
+                if type(phase_subset) == float:
+                    phase_subset = int(round(n_files * subset, 0))
+                if phase_subset < n_files:
+                    if phase_subset < 0:
+                        phase_subset = n_files + phase_subset
+                    fps = (random.sample(fps, max(phase_subset, 1)) if subset_shuffle 
+                            else fps[:phase_subset])
                     fps_by_phase[phase] = fps
         
         # extend lists of file_paths to same length for each phase by random sampling 

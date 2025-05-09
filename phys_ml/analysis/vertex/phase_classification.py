@@ -75,14 +75,14 @@ class PhaseClassification:
         inputs = np.empty((0, self.ls_length))
         targets = []
         for fp in tqdm(np.random.permutation(file_paths), desc='Load data'):
-            phase = self.get_phase_from_filepath(fp)
+            label = self.get_phase_from_filepath(fp)
             if self.file_type == 'vertex':
                 vertex = self.dataset.load_from_file(fp)
                 ls_vectors = self.predict_latent_space_vectors(vertex, samples_per_vertex)
             else:
                 ls_vectors = np.load(fp)
             inputs = np.concatenate((inputs, ls_vectors), axis=0)
-            targets.extend([phase] * samples_per_vertex)
+            targets.extend([label] * samples_per_vertex)
         return inputs, targets
 
     def train(self, train_files: list[str], samples_per_vertex: int) -> dict[str, np.ndarray]:
