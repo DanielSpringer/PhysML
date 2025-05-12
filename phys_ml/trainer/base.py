@@ -39,7 +39,7 @@ class BaseTrainer(Generic[T, S, R]):
     config_cls: type[T] = T.__bound__
 
     def __init__(self, project_name: str, config_name: str | None = None, subconfig_name: str|None = None, 
-                 load_from: str|None = None, config_dir: str = 'configs', config_kwargs: dict[str, Any] = {}):
+                 load_from: str|None = None, dataset: S|None = None, config_dir: str = 'configs', config_kwargs: dict[str, Any] = {}):
         """
         Main class for training and using a model.
 
@@ -60,6 +60,8 @@ class BaseTrainer(Generic[T, S, R]):
             Path to a saves-folder containing the run config (ending as `/<project_name>/<version>/`).\n
             Path can either be absolute or relative to `/<project_name>/`.\n
             If `None` uses `self.config.save_path`. (defaults to None)
+        dataset : FilebasedDataset | None, optional
+            Use existing / pre-loaded dataset for training.\n
         config_dir : str, optional
             Path to the directory of the config-files. (defaults to `'configs'`)
         config_kwargs : dict[str, Any], optional
@@ -80,9 +82,8 @@ class BaseTrainer(Generic[T, S, R]):
             self.config: T = self.config_cls.from_json(config_name, subconfig_name, config_dir, **config_kwargs)
             if self.config.save_path:
                 load_from = self.config.save_path
-        self.dataset: S = self.config.dataset(self.config)
         self.data_loader: type[DataLoader] = self.config.data_loader
-
+        self.dataset = dataset
         self.wrapper: R = None
         self.trainer: Trainer = None
     
@@ -113,6 +114,8 @@ class BaseTrainer(Generic[T, S, R]):
             Resume training from the last or best checkpoint or from a specific path. (defaults to None)
         """
         load_from = resume_from or self.config.resume
+        if self.dataset is None:
+            self.dataset = self.config.dataset(self.config)
         ckpt_path = self.init_trainer(train_mode, load_from)
         self.pre_train()
         self._train(ckpt_path)
@@ -181,7 +184,7 @@ class BaseTrainer(Generic[T, S, R]):
         if load_from:
             _ = self.load_model(load_from, predict=False)
         dataset = SimpleDataset(new_data)
-        dataloader = self.data_loader(dataset,batch_size=self.config.batch_size, 
+        dataloader = self.data_loader(dataset, batch_size=self.config.batch_size, 
                                       num_workers=self.config.num_dataloader_workers, 
                                       persistent_workers=bool(self.config.num_dataloader_workers),
                                       pin_memory=True)

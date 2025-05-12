@@ -21,11 +21,19 @@ class AutoEncoderVertexDataset(FilebasedDataset):
     n_freq = 24
     space_dim = 2
     k_dim = 3
-    dim = k_dim
-    length = n_freq**space_dim
     phase_borders = {'afm': (0.0, 0.2), 'sc': (0.2, 0.33), 'fm': (0.33, 0.51)}
+
+    @classmethod
+    @property
+    def dim(cls):
+        return cls.k_dim
     
-    def __init__(self, config: VertexConfig):
+    @classmethod
+    @property
+    def length(cls):
+        return cls.n_freq**cls.space_dim
+    
+    def __init__(self, config: VertexConfig, vertices: dict[str, np.ndarray]|None = None):
         super().__init__(config)
         config.matrix_dim = self.dim
         self.data_in_indices: torch.Tensor = torch.tensor([])
@@ -37,12 +45,15 @@ class AutoEncoderVertexDataset(FilebasedDataset):
                                                             config.subset_seed, config.subset_type)
         
         # Iterate through all files in given directory
-        for file_path in self.file_paths:
+        random.seed(config.sample_seed)
+        for file_path in tqdm(self.file_paths, desc='Loading vertex data'):
             # Get vertex and create slices in each of the 3 dimensions
-            vertex = self.load_from_file(file_path)
+            if vertices:
+                vertex = vertices[file_path]
+            else:
+                vertex = self.load_from_file(file_path)
 
             # sample random indices of a 576^3 matrix and merge all rows through the sampled indices
-            random.seed(config.sample_seed)
             merged_slices, indices = self.sample(vertex, config.sample_count_per_vertex, config=config)
         
             # Append result to data_in
@@ -54,9 +65,17 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         
         # Construct target data
         self.data_target = self.construct_targets()
+
+    @classmethod
+    def load_vertex_files(cls, file_paths: list[str]) -> dict[str, np.ndarray]:
+        vertices = {}
+        for file_path in tqdm(file_paths, desc='Loading vertex files'):
+            vertex = cls.load_from_file(file_path)
+            vertices[file_path] = vertex
+        return vertices
     
     @classmethod
-    def get_filepaths(cls, data_dir: str, subset: int|float|None, subset_shuffle: bool = True, subset_seed: int = 42,
+    def get_filepaths(cls, data_dir: str, subset: int|float|None, subset_shuffle: bool = True, subset_seed: int = 12,
                       subset_type: Literal['phase', 'sc', 'afm', 'fm']|None|list[str] = None) -> tuple[list[str], int]:
         # Subsample files
         random.seed(subset_seed)
@@ -171,15 +190,19 @@ class AutoEncoderVertexDataset(FilebasedDataset):
 
 
 class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
-    def __new__(cls, *args, **kwargs):
-        cls.dim = cls.space_dim * cls.k_dim
-        cls.length = cls.n_freq
-        return super().__new__(cls)
+    @classmethod
+    @property
+    def dim(cls):
+        return cls.space_dim * cls.k_dim
+    
+    @classmethod
+    @property
+    def length(cls):
+        return cls.n_freq
     
     @classmethod
     def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int, 
                **kwargs) -> tuple[list[list[float]], np.ndarray]:
-        cls.__new__(cls)
         return super().sample(vertex, sample_count_per_vertex, **kwargs)
     
     @classmethod
@@ -200,7 +223,9 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
 
 
 class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
-    def __init__(self, config: VertexConfig):
+    def __init__(self, config: VertexConfig, vertices: dict[str, np.ndarray]|None = None):
+        assert config.subset_type is None or len(config.subset_type) > 1, \
+            f'Subset_type contains only {len(config.subset_type)} phases. Contrastive training is not possible with less than 2 phases.'
         FilebasedDataset.__init__(self, config)
         config.matrix_dim = self.dim
 
@@ -208,39 +233,62 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
         self.file_paths_by_phase, config.subset, n_fps = self.get_filepaths(config.path_train, config.subset, 
                                                                             config.subset_shuffle, config.subset_seed, 
                                                                             config.subset_type)
+        self.file_paths = []
         
         # load and sample from vertices
         self.input_indices = torch.tensor([])
         self.input_vectors = torch.tensor([])
-        for phases_fps in tqdm(zip(*self.file_paths_by_phase.values()), desc='Processing vertex files', total=n_fps):
+        n_phases = len(config.subset_type) if config.subset_type else 3
+        for phases_fps in tqdm(zip(*self.file_paths_by_phase.values()), desc='Loading vertex data', total=n_fps):
             # phases_fps <- 1 file path for each phase
             random.seed(config.sample_seed)
-            vertices = [self.load_from_file(fp) for fp in tqdm(phases_fps, desc='Loading files', leave=False)]  # load 1 vertex from each phase
+            self.file_paths.extend(phases_fps)
+            
+            # get 1 vertex for each phase
+            if vertices:
+                vertices = [vertices[fp] for fp in phases_fps]
+            else:
+                vertices = [self.load_from_file(fp) for fp in tqdm(phases_fps, desc='Loading files', leave=False)]
+           
+            # sample from vertices
             for i, vertex in tqdm(enumerate(vertices), desc='Sampling vertices', total=len(vertices), leave=False):
-                # prepare a 4-sample for each vertex as input-part
-                other_vertices = vertices[(i + 1) % len(vertices)], vertices[(i + 2) % len(vertices)]
+                # prepare a batch of samples containing the input, a matching sample and a negative sample for every other phase
+                other_ids = [(i + j) % len(vertices) for j in range(1, n_phases)]
+                other_vertices = [vertices[idx] for idx in other_ids]
+                assert i not in other_ids, "Negative matches for vertex contain the vertex itself."
+                
                 input_samples, input_idcs = self.sample(vertex, config.sample_count_per_vertex)
                 pos_idcs = input_idcs.copy()
                 pos_idcs[:, -1] = (pos_idcs[:, -1] + 1) % self.n_freq
                 pos_samples = [self.get_vector_from_vertex(vertex, *idcs) for idcs in pos_idcs]
-                neg1_samples = [self.get_vector_from_vertex(other_vertices[0], *idcs) for idcs in input_idcs]
-                neg2_samples = [self.get_vector_from_vertex(other_vertices[1], *idcs) for idcs in input_idcs]
+                
+                # construct negative examples
+                neg_samples = [[self.get_vector_from_vertex(ov, *idcs) for idcs in input_idcs] for ov in other_vertices]
 
                 # concatenate samples and indices cross-wise
-                samples = np.array([input_samples, pos_samples, neg1_samples, neg2_samples])
-                idcs = np.array([input_idcs, pos_idcs, input_idcs, input_idcs])
+                samples = np.array([input_samples, pos_samples, *neg_samples])
+                idcs = np.array([input_idcs, pos_idcs, *([input_idcs] * (n_phases - 1))])
                 samples = samples.transpose(1, 0, 2)
                 idcs = idcs.transpose(1, 0, 2)
                 samples = np.concatenate(samples, axis=0)
                 idcs = np.concatenate(idcs, axis=0)
+                assert samples.shape[1] == self.n_freq * self.dim, \
+                    f'Sample length should be {self.n_freq * self.dim} ' \
+                    f'but is {samples.shape[1]}'
+                assert samples.shape[0] == config.sample_count_per_vertex * (n_phases + 1), \
+                    f'Number of samples for contrastive learning should be {n_phases + 1} samples ' \
+                    f'per each of the {config.sample_count_per_vertex} samples per vertex, ' \
+                    f'so {config.sample_count_per_vertex * (n_phases + 1)} but is {samples.shape[0]}'
                 self.input_vectors = torch.cat([self.input_vectors,
                                                 torch.tensor(samples, dtype=torch.float32)], axis=0)
                 self.input_indices = torch.cat([self.input_indices,
                                                 torch.tensor(idcs, dtype=torch.float32)], axis=0)
+        assert self.input_vectors.shape[0] == self.input_indices.shape[0], \
+            'Arrays of inputs and input-indices have different lengths.'
         self.targets = self.construct_targets(self.input_vectors)
     
     @classmethod
-    def get_filepaths(cls, data_dir: str, subset: int|float|None, subset_shuffle: bool = True, subset_seed: int = 42,
+    def get_filepaths(cls, data_dir: str, subset: int|float|None, subset_shuffle: bool = True, subset_seed: int = 12,
                       subset_type: Literal['afm', 'sc', 'fm']|list[str]|None = None) -> tuple[dict[str, list[str]], int]:
         # Subsample files
         random.seed(subset_seed)
@@ -281,7 +329,6 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
     @classmethod
     def sample(cls, vertex: np.ndarray, sample_count_per_vertex: int, 
                **kwargs) -> tuple[list[list[float]], np.ndarray]:
-        cls.__new__(cls)
         indices = random.sample(range(cls.length**cls.dim), sample_count_per_vertex)
         indices = np.array([[(x // cls.length**i) % cls.length for i in range(cls.dim)] for x in indices])
 

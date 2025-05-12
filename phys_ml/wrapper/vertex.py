@@ -49,6 +49,8 @@ class VertexWrapper24x6(VertexWrapper):
 class VertexWrapper24x6InfoNCE(VertexWrapper24x6):
     def __init__(self, config: Vertex24x6Config, in_dim: int):
         super().__init__(config, in_dim)
+        self.n_ct_samples = len(self.config.subset_type) + 1 if self.config.subset_type else 3
+        self.config.batch_size = self.config.batch_size // self.n_ct_samples * self.n_ct_samples
         self.nce = config.resolve_objectpath('info_nce.InfoNCE')(negative_mode='paired')
     
     def get_inputs_and_targets(self, batch: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -59,7 +61,7 @@ class VertexWrapper24x6InfoNCE(VertexWrapper24x6):
         return inputs, batch[2].float()
     
     def reshape_output(self, tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        tensor = tensor.reshape((tensor.shape[0] // 4, 4, tensor.shape[1])).transpose(1, 0)
+        tensor = tensor.reshape((tensor.shape[0] // self.n_ct_samples, self.n_ct_samples, tensor.shape[1])).transpose(1, 0)
         return tensor[0], tensor[1], tensor[2:].transpose(1, 0)
     
     def step(self, batch: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

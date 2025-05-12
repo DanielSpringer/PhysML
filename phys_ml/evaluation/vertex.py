@@ -17,6 +17,7 @@ from .. import metrics
 from ..visualization import vertex_visualization as vertvis
 from ..trainer import TrainerModes
 from ..trainer.vertex import VertexTrainer
+from ..load_data.vertex import AutoEncoderVertexDataset, AutoEncoderVertex24x6Dataset
 
 
 def background(f):
@@ -32,12 +33,12 @@ def process_vertex(cor_mat: np.ndarray, i: int, fp2_idcs: list[list[int]],
     if pre_load_vertices:
         vertex1 = paths_or_vertices[i]
     else:
-        vertex1 = vertvis.AutoEncoderVertexDataset.load_from_file(paths_or_vertices[i])
+        vertex1 = AutoEncoderVertexDataset.load_from_file(paths_or_vertices[i])
     for j in tqdm(fp2_idcs[i], leave=False):
         if pre_load_vertices:
             vertex2 = paths_or_vertices[j]
         else:
-            vertex2 = vertvis.AutoEncoderVertexDataset.load_from_file(paths_or_vertices[j])
+            vertex2 = AutoEncoderVertexDataset.load_from_file(paths_or_vertices[j])
         cor_mat[i, j] = cor_mat[j, i] = (np.sum(vertex1 * vertex2) / 
                                             (np.linalg.norm(vertex1) * np.linalg.norm(vertex2)))
     del vertex1
@@ -49,7 +50,7 @@ def vertex_correlation(vertex_dir: str, n_workers: int = -1, pre_load_vertices: 
     nest_asyncio.apply()
     paths_or_vertices = sorted(glob.glob(os.path.join(vertex_dir, '*.h5')))
     if pre_load_vertices:
-        paths_or_vertices = [vertvis.AutoEncoderVertexDataset.load_from_file(fp) 
+        paths_or_vertices = [AutoEncoderVertexDataset.load_from_file(fp) 
                              for fp in tqdm(paths_or_vertices, desc='load files')]
     s = len(paths_or_vertices)
     cor_mat = np.empty((s, s))
@@ -83,14 +84,14 @@ def evaluate_prediction(save_path: str, test_filename: str, trainer: VertexTrain
     else:
         pred = load_func(save_path)
     if len(target.shape) == 3:
-        pred = trainer.dataset.to_3d_vertex(pred)
+        pred = AutoEncoderVertex24x6Dataset.to_3d_vertex(pred)
     dim = len(pred.shape)
     if dim in [3, 6]:
         pred_slice = vertvis.get_mat_slice(pred, axis, slice_at)
         rmse = metrics.rmse(target, pred)
     else:
         if dim == 4:
-            pred_slice = pred.reshape((vertvis.AutoEncoderVertexDataset.length,) * 2, order='F')
+            pred_slice = pred.reshape((AutoEncoderVertexDataset.length,) * 2, order='F')
         else:
             pred_slice = pred
         rmse = metrics.rmse(target_slice, pred_slice)

@@ -28,25 +28,18 @@ from phys_ml.trainer.vertex import VertexTrainer24x6
 
 class PhaseClassification:
     def __init__(self, model_path: str, models: list[BaseEstimator], version: int, 
-                 mode: Literal['c', 'r'] = 'c', latent_space_paths: list[str]|None = None):
+                 mode: Literal['c', 'r'] = 'c'):
         self.mode = mode
         self.models = models
         self.version = version
         self.encode = model_path is not None
-        self.file_type: Literal['vertex', 'latent_space'] = None
-        if not latent_space_paths:
-            self.file_type = 'vertex'
-        else:
-            self.file_type = 'latent_space'
         if self.encode:
             self.vertex_trainer = VertexTrainer24x6(project_name='vertex_24x6', load_from=model_path)
             _ = self.vertex_trainer.load_model(load_from=model_path, predict=True, encode_only=True)
-            self.dataset = self.vertex_trainer.dataset
             self.ls_length = self.vertex_trainer.config.hidden_dims[-1]
             self.device = self.vertex_trainer.get_device_from_accelerator(self.vertex_trainer.config.device_type)
         else:
-            self.dataset = AutoEncoderVertex24x6Dataset
-            self.ls_length = self.dataset.length * self.dataset.dim
+            self.ls_length = AutoEncoderVertex24x6Dataset.length * AutoEncoderVertex24x6Dataset.dim
         self.load_models()
         self.predict_samples: tuple[np.ndarray, list[int]] = None
     
@@ -59,35 +52,26 @@ class PhaseClassification:
             for i, (phase, borders) in enumerate(AutoEncoderVertex24x6Dataset.phase_borders.items()):
                 if tp >= borders[0] and tp < borders[1]:
                     return i
-    
-    def predict_latent_space_vectors(self, vertex: np.ndarray, samples_per_vertex: int) -> np.ndarray:
-        # NOTE: also possible with dataloader and trainer.predict
-        input_vectors, input_idcs = self.dataset.sample(vertex, samples_per_vertex)
-        if self.encode:
-            input_vectors = torch.tensor(input_vectors, dtype=torch.float32).to(self.device)
-            ls_vectors = self.vertex_trainer.wrapper.predict_step((input_vectors, input_idcs)).detach().cpu().numpy()
-        else:
-            ls_vectors = np.array(input_vectors)
-        return ls_vectors
 
-    def load_data(self, file_paths: list[str], samples_per_vertex: int) -> tuple[np.ndarray, list[int|float]]:
-        assert len(file_paths) > 0, 'List `file_paths` is empty.'
+    def load_data(self, dataset: AutoEncoderVertex24x6Dataset) -> tuple[np.ndarray, list[int|float]]:
         inputs = np.empty((0, self.ls_length))
         targets = []
-        for fp in tqdm(np.random.permutation(file_paths), desc='Load data'):
-            label = self.get_phase_from_filepath(fp)
-            if self.file_type == 'vertex':
-                vertex = self.dataset.load_from_file(fp)
-                ls_vectors = self.predict_latent_space_vectors(vertex, samples_per_vertex)
+        samples_per_vertex = dataset.config.sample_count_per_vertex
+        dataloader = DataLoader(dataset, batch_size=samples_per_vertex)
+        for i, (inputs, idcs, _) in tqdm(enumerate(dataloader), desc='Load data', total=len(dataset), leave=False):
+            label = self.get_phase_from_filepath(dataset.file_paths[i])
+            if self.encode:
+                input_vectors = torch.tensor(inputs, dtype=torch.float32).to(self.device)
+                ls_vectors = self.vertex_trainer.wrapper.predict_step((input_vectors, idcs)).detach().cpu().numpy()
             else:
-                ls_vectors = np.load(fp)
+                ls_vectors = inputs
             inputs = np.concatenate((inputs, ls_vectors), axis=0)
             targets.extend([label] * samples_per_vertex)
         return inputs, targets
 
-    def train(self, train_files: list[str], samples_per_vertex: int) -> dict[str, np.ndarray]:
-        inputs, targets = self.load_data(train_files, samples_per_vertex)
-        for model in tqdm(self.models, desc='Fit models'):
+    def train(self, dataset: AutoEncoderVertex24x6Dataset) -> dict[str, np.ndarray]:
+        inputs, targets = self.load_data(dataset)
+        for model in tqdm(self.models, desc='Fit models', leave=False):
             try:
                 model.fit(inputs, targets)
                 with open(f'{self.version:02}_{repr(model)}.pkl','wb') as f:
@@ -148,14 +132,14 @@ class PhaseClassification:
             print(f'Skipping model {repr(model)}, which could not be fitted.')
             return None, None
 
-    def evaluate_classifiers(self, test_files: list[str], samples_per_vertex: int, print_conf_mat: bool = True,
+    def evaluate_classifiers(self, dataset: AutoEncoderVertex24x6Dataset, print_conf_mat: bool = True,
                              normalize: Literal['true', 'pred', 'all'] = 'true') \
                                 -> dict[str, tuple[dict[str, float], np.ndarray]]:
         self.load_models()
         results = {}
-        inputs, targets = self.load_data(test_files, samples_per_vertex)
-        labels = list(AutoEncoderVertex24x6Dataset.phase_borders.keys())
-        for model in tqdm(self.models, desc='Predict'):
+        inputs, targets = self.load_data(dataset)
+        labels = list(dataset.phase_borders.keys())
+        for model in tqdm(self.models, desc='Predict', leave=False):
             scores, conf_mat = self.evaluate_model(model, inputs, targets, labels, print_conf_mat, normalize)
             results[repr(model)] = (scores, conf_mat)
         return results
