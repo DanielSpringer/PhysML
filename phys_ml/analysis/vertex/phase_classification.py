@@ -22,13 +22,13 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from phys_ml.load_data.base import SimpleDataset
-from phys_ml.load_data.vertex import AutoEncoderVertex24x6Dataset
+from phys_ml.load_data.vertex import AutoEncoderVertex24x6Dataset, AutoEncoder24x6InfoNCEDataset
 from phys_ml.trainer.vertex import VertexTrainer24x6
 
 
 class PhaseClassification:
     def __init__(self, model_path: str, models: list[BaseEstimator], version: int, 
-                 mode: Literal['c', 'r'] = 'c'):
+                 mode: Literal['c', 'r'] = 'c', batch_size: int = 2048):
         self.mode = mode
         self.models = models
         self.version = version
@@ -38,8 +38,10 @@ class PhaseClassification:
             _ = self.vertex_trainer.load_model(load_from=model_path, predict=True, encode_only=True)
             self.ls_length = self.vertex_trainer.config.hidden_dims[-1]
             self.device = self.vertex_trainer.get_device_from_accelerator(self.vertex_trainer.config.device_type)
+            self.batch_size = self.vertex_trainer.config.batch_size
         else:
             self.ls_length = AutoEncoderVertex24x6Dataset.length * AutoEncoderVertex24x6Dataset.dim
+            self.batch_size = batch_size
         self.load_models()
         self.predict_samples: tuple[np.ndarray, list[int]] = None
     
@@ -56,17 +58,21 @@ class PhaseClassification:
     def load_data(self, dataset: AutoEncoderVertex24x6Dataset) -> tuple[np.ndarray, list[int|float]]:
         inputs = np.empty((0, self.ls_length))
         targets = []
-        samples_per_vertex = dataset.config.sample_count_per_vertex
-        dataloader = DataLoader(dataset, batch_size=samples_per_vertex)
-        for i, (inputs, idcs, _) in tqdm(enumerate(dataloader), desc='Load data', total=len(dataset), leave=False):
-            label = self.get_phase_from_filepath(dataset.file_paths[i])
+        desc = 'Encode vertex samples' if self.encode else 'Load vertex samples'
+        dataloader = DataLoader(dataset, batch_size=self.batch_size)
+        for i, (input_vectors, idcs, _, fps) in tqdm(enumerate(dataloader), desc=desc, total=len(dataloader), leave=False):
+            if isinstance(dataset, AutoEncoder24x6InfoNCEDataset):
+                input_vectors = input_vectors.reshape((-1, input_vectors.shape[-1]))
+                idcs = idcs.reshape((-1, idcs.shape[-1]))
+                fps = [fp for sublist in zip(*fps) for fp in sublist]
+            labels = [self.get_phase_from_filepath(fp) for fp in fps]
             if self.encode:
-                input_vectors = torch.tensor(inputs, dtype=torch.float32).to(self.device)
+                input_vectors = input_vectors.to(self.device)
                 ls_vectors = self.vertex_trainer.wrapper.predict_step((input_vectors, idcs)).detach().cpu().numpy()
             else:
-                ls_vectors = inputs
+                ls_vectors = input_vectors
             inputs = np.concatenate((inputs, ls_vectors), axis=0)
-            targets.extend([label] * samples_per_vertex)
+            targets.extend(labels)
         return inputs, targets
 
     def train(self, dataset: AutoEncoderVertex24x6Dataset) -> dict[str, np.ndarray]:
@@ -276,7 +282,7 @@ class NeuralNetClassifier:
         dataloader = DataLoader(dataset, batch_size=self.batch_size, num_workers=self.num_workers, 
                                 persistent_workers=bool(self.num_workers), pin_memory=True)
         pred = self.trainer.predict(self.wrapper, dataloader)
-        pred = torch.concat(pred, dim=0)
+        pred = torch.cat(pred, dim=0)
         pred = torch.max(pred, dim=1).indices
         pred = pred.cpu().numpy()
         return pred

@@ -50,15 +50,22 @@ class VertexWrapper24x6InfoNCE(VertexWrapper24x6):
     def __init__(self, config: Vertex24x6Config, in_dim: int):
         super().__init__(config, in_dim)
         self.n_ct_samples = len(self.config.subset_type) + 1 if self.config.subset_type else 3
-        self.config.batch_size = self.config.batch_size // self.n_ct_samples * self.n_ct_samples
+        # self.config.batch_size = self.config.batch_size // self.n_ct_samples * self.n_ct_samples
         self.nce = config.resolve_objectpath('info_nce.InfoNCE')(negative_mode='paired')
     
     def get_inputs_and_targets(self, batch: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        # if self.positional_encoding:
+        #     inputs = (batch[0], batch[1])
+        # else:
+        #     inputs = batch[0]
+        # return inputs, batch[2].float()
+        input_vectors, idcs, targets = batch
+        samples = input_vectors.reshape((-1, input_vectors.shape[-1]))
         if self.positional_encoding:
-            inputs = (batch[0], batch[1])
+            inputs = (samples, idcs.reshape((-1, idcs.shape[-1])))
         else:
-            inputs = batch[0]
-        return inputs, batch[2].float()
+            inputs = samples
+        return inputs, targets.reshape((-1, targets.shape[-1])).float()
     
     def reshape_output(self, tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         tensor = tensor.reshape((tensor.shape[0] // self.n_ct_samples, self.n_ct_samples, tensor.shape[1])).transpose(1, 0)
