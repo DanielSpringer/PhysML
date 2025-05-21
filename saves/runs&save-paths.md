@@ -30,6 +30,7 @@ vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-08/version_5
 
 # 04 phase classification
 ## 04-1 training using all vertices
+### 04-1-0 default
 vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_1
 
 ### 04-1-1 training on uncompressed vertices
@@ -39,9 +40,10 @@ vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_1
 vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_1
 
 ### 04-1-3 using contrastive autoencoder
-vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-03/version_0
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-09/version_0
 
 ## 04-2 20% test-split within each phase
+### 04-2-0 default
 vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_2
 
 ### 04-2-1 training on uncompressed vertices
@@ -55,19 +57,20 @@ vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_2
 vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_3
 
 ### 04-3-2 include SC-phase in classifier training
+#### 04-3-2-0 default
 vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_3
 
 #### 04-3-2-1 using neural network classifier
 vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_3
 
 #### 04-3-2-2 using contrastive autoencoder (SC)
-vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4095_2025-05-10/version_0
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-15/version_2
 
 #### 04-3-2-3 using contrastive autoencoder (AFM)
-vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4095_2025-05-10/version_1
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-21/version_0
 
 #### 04-3-2-4 using contrastive autoencoder (FM)
-vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4095_2025-05-12/version_0
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-21/version_1
 
 
 # 05 phase regression
@@ -82,4 +85,17 @@ vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_2
 vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_3
 
 ### 05-3-2 include SC-phase in classifier training
+#### 05-3-2-0 default
 vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_3
+
+#### 05-3-2-1 using neural network classifier
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_3
+
+#### 05-3-2-2 using contrastive autoencoder (SC)
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-15/version_2
+
+#### 05-3-2-3 using contrastive autoencoder (AFM)
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-21/version_0
+
+#### 05-3-2-4 using contrastive autoencoder (FM)
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-21/version_1
