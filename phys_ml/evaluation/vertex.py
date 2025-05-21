@@ -40,15 +40,15 @@ def process_vertex(cor_mat: np.ndarray, i: int, fp2_idcs: list[list[int]],
         else:
             vertex2 = AutoEncoderVertexDataset.load_from_file(paths_or_vertices[j])
         cor_mat[i, j] = cor_mat[j, i] = (np.sum(vertex1 * vertex2) / 
-                                            (np.linalg.norm(vertex1) * np.linalg.norm(vertex2)))
+                                         (np.linalg.norm(vertex1) * np.linalg.norm(vertex2)))
     del vertex1
 
 
-def vertex_correlation(vertex_dir: str, n_workers: int = -1, pre_load_vertices: bool = False, 
+def vertex_correlation(vertex_dir: str, n_workers: int = -1, pre_load_vertices: bool = False, vertex_file_ending: str = 'h5',
                        save_suffix: str = '') -> np.ndarray:
     """ pre_load_vertices: Load all vertices into memory. Requires ca. 100 GB of memory for all 51 vertices."""
     nest_asyncio.apply()
-    paths_or_vertices = sorted(glob.glob(os.path.join(vertex_dir, '*.h5')))
+    paths_or_vertices = sorted(glob.glob(os.path.join(vertex_dir, f'*.{vertex_file_ending}')))
     if pre_load_vertices:
         paths_or_vertices = [AutoEncoderVertexDataset.load_from_file(fp) 
                              for fp in tqdm(paths_or_vertices, desc='load files')]

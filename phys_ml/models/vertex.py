@@ -33,7 +33,7 @@ class AutoEncoderVertex(BaseModule[VertexConfig]):
     def encode(self, data_in) -> torch.Tensor:
         if self.config.positional_encoding:
             idcs = data_in[0] / self.in_dim
-            x = self.embedding(torch.cat([idcs, data_in[1]], axis=1))
+            x = self.embedding(torch.cat([idcs, data_in[1]], dim=1))
         else:
             x = self.embedding(data_in)
         x = self.encoder(x)
@@ -79,7 +79,7 @@ class UNetVertex(BaseModule[VertexConfig]):
         x = data_in
         for layer in self.decoder_layers:
             x = self.activation(x)
-            x = layer(torch.cat([encodings.pop(), x], axis=1))
+            x = layer(torch.cat([encodings.pop(), x], dim=1))
         x = self.out(x)
         return x
     
