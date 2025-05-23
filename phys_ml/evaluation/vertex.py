@@ -9,7 +9,7 @@ import numpy as np
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from tqdm.notebook import tqdm
 
@@ -39,19 +39,24 @@ def process_vertex(cor_mat: np.ndarray, i: int, fp2_idcs: list[list[int]],
             vertex2 = paths_or_vertices[j]
         else:
             vertex2 = AutoEncoderVertexDataset.load_from_file(paths_or_vertices[j])
-        cor_mat[i, j] = cor_mat[j, i] = (np.sum(vertex1 * vertex2) / 
-                                         (np.linalg.norm(vertex1) * np.linalg.norm(vertex2)))
+        #fv1, fv2 = vertex1.flatten(), vertex2.flatten()
+        fv1, fv2 = vertex1, vertex2
+        cor_mat[i, j] = cor_mat[j, i] = (np.sum(fv1 * fv2) / 
+                                         (np.linalg.matrix_norm(fv1) * np.linalg.matrix_norm(fv2)))
     del vertex1
 
 
 def vertex_correlation(vertex_dir: str, paths_or_vertices: list[np.ndarray]|list[str]|None = None, n_workers: int = -1, 
-                       pre_load_vertices: bool = False, vertex_file_ending: str = 'h5', save_suffix: str = '') -> np.ndarray:
+                       pre_load_vertices: bool = False, vertex_file_ending: Literal['h5', 'npy'] = 'h5', save_suffix: str = '') -> np.ndarray:
     """ pre_load_vertices: Load all vertices into memory. Requires ca. 100 GB of memory for all 51 vertices."""
     nest_asyncio.apply()
     if paths_or_vertices is None:
         paths_or_vertices = sorted(glob.glob(os.path.join(vertex_dir, f'*.{vertex_file_ending}')))
         if pre_load_vertices:
-            paths_or_vertices = [AutoEncoderVertexDataset.load_from_file(fp) for fp in tqdm(paths_or_vertices, desc='load files')]
+            if vertex_file_ending == 'h5':
+                paths_or_vertices = [AutoEncoderVertexDataset.load_from_file(fp) for fp in tqdm(paths_or_vertices, desc='load files')]
+            elif vertex_file_ending == 'npy':
+                paths_or_vertices = [np.load(fp) for fp in tqdm(paths_or_vertices, desc='load files')]
     s = len(paths_or_vertices)
     cor_mat = np.empty((s, s))
     fp2_idcs = [range(i, s) for i in range(1, s + 1)]

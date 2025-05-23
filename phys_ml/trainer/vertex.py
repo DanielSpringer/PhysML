@@ -33,6 +33,8 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
         # predict
         if load_from:
             ckpt_path = self.init_trainer(train_mode, load_from)
+        else:
+            ckpt_path = None
         pred_vertex = self.prepare_prediction_matrix(dataset.length, dataset.dim, encode_only, 
                                                      replace_at=self.config.construction_axis-1)
         self.wrapper.set_predictor(pred_vertex, encode_only)
@@ -46,7 +48,7 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
     
     def prepare_prediction_matrix(self, in_length: int, out_dim: int, encode_only: bool = False, 
                                    replace_at: int|None = None) -> torch.Tensor:
-        #device = self.get_device_from_accelerator(self.config.device_type)
+        device = self.get_device_from_accelerator(self.config.device_type)
         if encode_only:
             assert replace_at is not None, "If `encode_only` is True, `insert_at` must be provided."
             shape = [in_length] * out_dim
@@ -54,7 +56,7 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
             pred_vertex = np.zeros(tuple(shape))
         else:
             pred_vertex = np.zeros((in_length,) * out_dim)
-        return torch.tensor(pred_vertex, dtype=torch.float32)#.to(device)
+        return torch.tensor(pred_vertex, dtype=torch.float32).to(device)
     
     def load_latentspace(self, save_path: str|None = None, 
                          file_name: str|None = None) -> np.ndarray|None:

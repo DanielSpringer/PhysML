@@ -34,7 +34,8 @@ class AutoEncoderVertexDataset(FilebasedDataset):
     def length(cls):
         return cls.n_freq**cls.space_dim
     
-    def __init__(self, config: VertexConfig, vertices: dict[str, np.ndarray]|None = None, return_filepaths: bool = False):
+    def __init__(self, config: VertexConfig, vertices: dict[str, np.ndarray]|None = None, file_paths: list[str]|None = None,
+                 return_filepaths: bool = False):
         super().__init__(config)
         config.matrix_dim = self.dim
         self.return_filepaths = return_filepaths
@@ -44,7 +45,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
 
         # Subsample files
         self.file_paths, config.subset = self.get_filepaths(config.path_train, config.subset, config.subset_shuffle, 
-                                                            config.subset_seed, config.subset_type)
+                                                            config.subset_seed, config.subset_type, file_paths)
         
         # Iterate through all files in given directory
         random.seed(config.sample_seed)
@@ -78,10 +79,12 @@ class AutoEncoderVertexDataset(FilebasedDataset):
     
     @classmethod
     def get_filepaths(cls, data_dir: str, subset: int|float|None, subset_shuffle: bool = True, subset_seed: int = 12,
-                      subset_type: Literal['phase', 'sc', 'afm', 'fm']|None|list[str] = None) -> tuple[list[str], int]:
+                      subset_type: Literal['phase', 'sc', 'afm', 'fm']|None|list[str] = None, 
+                      file_paths: list[str]|None = None) -> tuple[list[str], int]:
         # Subsample files
         random.seed(subset_seed)
-        file_paths = [Path(fp).resolve().as_posix() for fp in glob.glob(f"{data_dir}/*.h5")]
+        if file_paths is None:
+            file_paths = [Path(fp).resolve().as_posix() for fp in glob.glob(f"{data_dir}/*.h5")]
         
         if subset_type and subset_type != 'phase':
             # select only vertices for certain phases
@@ -228,7 +231,8 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
 
 
 class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
-    def __init__(self, config: VertexConfig, vertex_dict: dict[str, np.ndarray]|None = None, return_filepaths: bool = False):
+    def __init__(self, config: VertexConfig, vertex_dict: dict[str, np.ndarray]|None = None, file_paths: list[str]|None = None,
+                 return_filepaths: bool = False):
         assert config.subset_type is None or len(config.subset_type) > 1, \
             f'Subset_type contains only {len(config.subset_type)} phases. Contrastive training is not possible with less than 2 phases.'
         FilebasedDataset.__init__(self, config)
@@ -238,7 +242,7 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
         # Subsample files
         self.file_paths_by_phase, config.subset, n_fps = self.get_filepaths(config.path_train, config.subset, 
                                                                             config.subset_shuffle, config.subset_seed, 
-                                                                            config.subset_type)
+                                                                            config.subset_type, file_paths)
         self.file_paths_by_phase = pd.DataFrame(self.file_paths_by_phase)
         
         # load and sample from vertices
@@ -299,12 +303,15 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
     
     @classmethod
     def get_filepaths(cls, data_dir: str, subset: int|float|None, subset_shuffle: bool = True, subset_seed: int = 12,
-                      subset_type: Literal['afm', 'sc', 'fm']|list[str]|None = None) -> tuple[dict[str, list[str]], int]:
+                      subset_type: Literal['afm', 'sc', 'fm']|list[str]|None = None, 
+                      file_paths: list[str]|None = None) -> tuple[dict[str, list[str]], int]:
         # Subsample files
         random.seed(subset_seed)
-        file_paths = [Path(fp).resolve().as_posix() for fp in glob.glob(f"{data_dir}/*.h5")]
+        if file_paths is None:
+            file_paths = [Path(fp).resolve().as_posix() for fp in glob.glob(f"{data_dir}/*.h5")]
         if subset_type is None:
             subset_type = ['afm', 'sc', 'fm']
+        
         fps_by_phase = {phase: [] for phase in subset_type}
         for fp in file_paths:
             tp = float(Path(fp).stem[2:6])

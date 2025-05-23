@@ -104,11 +104,14 @@ def plot_section(data: np.ndarray, axis: int|tuple[int,int], slice_at: int|tuple
 
 def plot_compare_grid(data: dict[str, np.ndarray], nrows: int, ncols: int, axis: int|tuple[int,int], 
                       slice_at: int|tuple[int,...]|None, figsize: tuple[int, int] = (14,6),  
-                      colmap: str|mplcolors.Colormap|None = None, title: str|None = None):
+                      colmap: str|mplcolors.Colormap|None = None, title: str|None = None,
+                      vmin: float|None = None, vmax: float|None = None):
     assert nrows * ncols >= len(data), \
         "Given `nrows` and `ncols` do not yield enough subplots for the length of the given data"
     labels = data.keys()
-    data, vmin, vmax = _prepare_data(list(data.values()), axis, slice_at)
+    data, vmin_, vmax_ = _prepare_data(list(data.values()), axis, slice_at)
+    vmin = vmin if vmin is not None else vmin_
+    vmax = vmax if vmax is not None else vmax_
     fig, axs = plt.subplots(nrows, ncols, figsize=figsize, layout='compressed', subplot_kw={'aspect': 'equal'})
     axs = axs.flatten()
     for ax, label, d in zip(axs, labels, data):
