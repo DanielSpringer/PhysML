@@ -39,10 +39,12 @@ def process_vertex(cor_mat: np.ndarray, i: int, fp2_idcs: list[list[int]],
             vertex2 = paths_or_vertices[j]
         else:
             vertex2 = AutoEncoderVertexDataset.load_from_file(paths_or_vertices[j])
-        #fv1, fv2 = vertex1.flatten(), vertex2.flatten()
-        fv1, fv2 = vertex1, vertex2
-        cor_mat[i, j] = cor_mat[j, i] = (np.sum(fv1 * fv2) / 
-                                         (np.linalg.matrix_norm(fv1) * np.linalg.matrix_norm(fv2)))
+        # fv1, fv2 = vertex1.flatten(), vertex2.flatten()
+        # fv1, fv2 = vertex1, vertex2
+        # cor_mat[i, j] = cor_mat[j, i] = (np.sum(fv1 * fv2) / 
+        #                                  (np.linalg.matrix_norm(fv1) * np.linalg.matrix_norm(fv2)))
+        v1n, v2n = vertex1 - vertex1.mean(), vertex2 - vertex2.mean()
+        cor_mat[i, j] = cor_mat[j, i] = np.sum(v1n * v2n) / np.sqrt(np.sum(v1n**2) * np.sum(v2n**2))
     del vertex1
 
 
