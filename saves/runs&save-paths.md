@@ -40,7 +40,7 @@ vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_1
 vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS8192_2025-03-22/version_1
 
 ### 04-1-3 using contrastive autoencoder
-vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-09/version_0
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-24/version_4
 
 ## 04-2 20% test-split within each phase
 ### 04-2-0 default
@@ -70,7 +70,7 @@ vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-15/version_2
 vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-21/version_0
 
 #### 04-3-2-4 using contrastive autoencoder (FM)
-vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-21/version_1
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-24/version_5
 
 
 # 05 phase regression
@@ -98,4 +98,4 @@ vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-15/version_2
 vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-21/version_0
 
 #### 05-3-2-4 using contrastive autoencoder (FM)
-vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-21/version_1
+vertex_24x6/save_AUTO_ENCODER_VERTEX_24X6_BS4096_2025-05-24/version_5
