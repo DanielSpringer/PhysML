@@ -79,7 +79,7 @@ class UNetVertex(BaseModule[VertexConfig]):
         x = data_in
         for layer in self.decoder_layers:
             x = self.activation(x)
-            x = layer(torch.cat([encodings.pop(), x], dim=1))
+            x = layer(encodings.pop() + x)
         x = self.out(x)
         return x
     

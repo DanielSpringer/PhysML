@@ -225,7 +225,7 @@ class BaseTrainer(Generic[T, S, R]):
         save_path = save_path or self.config.save_path
         if save_path:
             run_path = Path(save_path).parent.name
-            version = int(Path(save_path).name.split('_')[-1])
+            version = Path(save_path).name
         else:
             run_path = self.save_prefix + str(datetime.datetime.now().date())
             version = None
@@ -269,14 +269,14 @@ class BaseTrainer(Generic[T, S, R]):
             save_path = self.config.save_path
         save_path: Path = Path(save_path)
         if save_path.is_absolute():
-            return save_path
+            return save_path.resolve()
         if self.config is None:
             pref = Path(self.config_cls._base_dir) / self.config_cls.save_dir
         else:
             pref = self.config.base_dir / self.config.save_dir
-        return pref / self.project_name / save_path
+        return (pref / self.project_name / save_path).resolve()
     
-    def get_model_ckpt(self, path: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str) -> str:
+    def get_model_ckpt(self, path: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str) -> str|None:
         """
         Gets the best or latest model checkpoint.
         If trainer not fitted, gets the checkpoint with the highest epoch from the saved checkpoints.
@@ -315,8 +315,9 @@ class BaseTrainer(Generic[T, S, R]):
         ckpt_path = None
         if load_from is not None:
             ckpt_path = self.get_model_ckpt(load_from)
-            self.wrapper = self.config.model_wrapper.load_from_checkpoint(ckpt_path, config=self.config, 
-                                                                          in_dim=self.input_size)
+            if ckpt_path:
+                self.wrapper = self.config.model_wrapper.load_from_checkpoint(ckpt_path, config=self.config, 
+                                                                            in_dim=self.input_size)
         else:
             self.wrapper = self.config.model_wrapper(self.config, self.input_size)
         self.wrapper.encode_only = encode_only

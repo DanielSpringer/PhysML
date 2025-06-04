@@ -311,6 +311,8 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
             file_paths = [Path(fp).resolve().as_posix() for fp in glob.glob(f"{data_dir}/*.h5")]
         if subset_type is None:
             subset_type = ['afm', 'sc', 'fm']
+        elif isinstance(subset_type, str):
+            subset_type = [subset_type]
         
         fps_by_phase = {phase: [] for phase in subset_type}
         for fp in file_paths:

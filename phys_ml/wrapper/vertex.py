@@ -36,16 +36,14 @@ class VertexWrapper(BaseWrapper[AutoEncoderVertex, VertexConfig]):
         if self.encode_only:
             pred = self.model.encode(inputs)
             if self.pred_vertex is not None:
-                self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred
+                self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, 
+                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred
             return pred
         else:
             pred = self.model(inputs)
             if self.pred_vertex is not None:
-                self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred
-            # for i, p in enumerate(pred):
-            #     idx = [idx[i] for idx in idcs]
-            #     idx[self.replace_at] = slice(None)
-            #     self.pred_vertex[*idx] = p
+                self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, 
+                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred
             return pred
 
 
@@ -58,7 +56,6 @@ class VertexWrapper24x6InfoNCE(VertexWrapper24x6):
     def __init__(self, config: Vertex24x6Config, in_dim: int):
         super().__init__(config, in_dim)
         self.n_ct_samples = len(self.config.subset_type) + 1 if self.config.subset_type else 4
-        # self.config.batch_size = self.config.batch_size // self.n_ct_samples * self.n_ct_samples
         self.nce = config.resolve_objectpath('info_nce.InfoNCE')(negative_mode='paired')
     
     def get_inputs_and_targets(self, batch: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -85,28 +82,18 @@ class VertexWrapper24x6InfoNCE(VertexWrapper24x6):
     
     def predict_step(self, batch: tuple[torch.Tensor, torch.Tensor]):
         inputs, idcs = batch
-        # print(inputs.shape, len(idcs), idcs[0].shape)
         ndims = len(idcs)
-        # FIXME: 
-        # - not needed for phase-classification -> inputs.shape=torch.Size([batch_size, 144]), idcs.shape=torch.Size([batch_size, 6])
-        # - needed for full prediction -> inputs.shape=torch.Size([batch_size, 144]), idcs=list[6, tensor.shape(batch_size)]
         if isinstance(idcs, list):
             idcs = torch.stack(idcs).T
         if self.encode_only:
             pred = self.model.encode(inputs)
             if self.pred_vertex is not None:
-                self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred
-            # for i, p in enumerate(pred):
-            #     idx = [idx[i] for idx in idcs]
-            #     idx[self.replace_at] = slice(None)
-            #     self.pred_vertex[*idx] = p
+                self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, 
+                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred
             return pred
         else:
             pred, latent = self.model(inputs)
             if self.pred_vertex is not None:
-                self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred
-            # for i, p in enumerate(pred):
-            #     idx = [idx[i] for idx in idcs]
-            #     idx[self.replace_at] = slice(None)
-            #     self.pred_vertex[*idx] = p
+                self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, 
+                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred
             return pred
