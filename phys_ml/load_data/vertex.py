@@ -14,6 +14,7 @@ import torch
 from tqdm.notebook import tqdm
 
 from ..config.vertex import *
+from ..util import is_notebook
 from . import FilebasedDataset
 
 
@@ -47,9 +48,14 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         self.file_paths, config.subset = self.get_filepaths(config.path_train, config.subset, config.subset_shuffle, 
                                                             config.subset_seed, config.subset_type, file_paths)
         
+        # use tqdm only in notebooks
+        iterator = self.file_paths
+        if is_notebook():
+            iterator = tqdm(iterator, desc='Loading vertex data')
+        
         # Iterate through all files in given directory
         random.seed(config.sample_seed)
-        for file_path in tqdm(self.file_paths, desc='Loading vertex data'):
+        for file_path in iterator:
             # Get vertex and create slices in each of the 3 dimensions
             if vertices:
                 vertex = vertices[file_path]
@@ -71,8 +77,13 @@ class AutoEncoderVertexDataset(FilebasedDataset):
 
     @classmethod
     def load_vertex_files(cls, file_paths: list[str]) -> dict[str, np.ndarray]:
+        # use tqdm only in notebooks
+        iterator = file_paths
+        if is_notebook():
+            iterator = tqdm(iterator, desc='Loading vertex files')
+        
         vertices = {}
-        for file_path in tqdm(file_paths, desc='Loading vertex files'):
+        for file_path in iterator:
             vertex = cls.load_from_file(file_path)
             vertices[file_path] = vertex
         return vertices
@@ -244,13 +255,19 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
                                                                             config.subset_shuffle, config.subset_seed, 
                                                                             config.subset_type, file_paths)
         self.file_paths_by_phase = pd.DataFrame(self.file_paths_by_phase)
+
+        # use tqdm only in notebooks
+        is_notebook_ = is_notebook()
         
         # load and sample from vertices
         self.input_indices = torch.tensor([])
         self.input_vectors = torch.tensor([])
         self.file_paths = []
         self.n_phases = len(config.subset_type) if config.subset_type else 3
-        for i, phases_fps in tqdm(self.file_paths_by_phase.iterrows(), desc='Loading vertex data', total=n_fps):
+        iterator = self.file_paths_by_phase.iterrows()
+        if is_notebook_:
+            iterator = tqdm(iterator, desc='Loading vertex data', total=n_fps)
+        for i, phases_fps in iterator:
             # phases_fps <- 1 file path for each phase
             random.seed(config.sample_seed)
             
@@ -258,10 +275,16 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
             if vertex_dict:
                 vertices = [vertex_dict[fp] for fp in phases_fps]
             else:
-                vertices = [self.load_from_file(fp) for fp in tqdm(phases_fps, desc='Loading files', leave=False)]
+                sub_iterator = phases_fps
+                if is_notebook_:
+                    sub_iterator = tqdm(sub_iterator, desc='Loading files', leave=False)
+                vertices = [self.load_from_file(fp) for fp in sub_iterator]
            
             # sample from vertices
-            for i, vertex in tqdm(enumerate(vertices), desc='Sampling vertices', total=len(vertices), leave=False):
+            sub_iterator = enumerate(vertices)
+            if is_notebook_:
+                sub_iterator = tqdm(sub_iterator, desc='Sampling vertices', total=len(vertices), leave=False)
+            for i, vertex in sub_iterator:
                 # prepare a batch of samples containing the input, a matching sample and a negative sample for every other phase
                 other_ids = [(i + j) % len(vertices) for j in range(1, self.n_phases)]
                 other_vertices = [vertices[idx] for idx in other_ids]
