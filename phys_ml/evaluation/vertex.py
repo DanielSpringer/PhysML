@@ -132,13 +132,17 @@ def make_test_from_train_dataset(vertices: dict[str, np.ndarray], path_train: st
 
 
 def init_trainer(config_kwargs: dict[str, Any], dataset: AutoEncoderVertex24x6Dataset|None = None, dataset_kwargs: dict[str, Any] = {},
-                 device_type: Literal['cpu', 'gpu'] = 'gpu', load_from: str|None = None, **kwargs) -> VertexTrainer24x6:
+                 subset_type: list[str]|str|None = None, device_type: Literal['cpu', 'gpu'] = 'gpu', 
+                 load_from: str|None = None, **kwargs) -> VertexTrainer24x6:
     kws = config_kwargs.copy()
     kws.update(dataset_kwargs)
     kws['device_type'] = device_type
     for k, v in kwargs.items():
         kws[k] = v
-    kws['subset_type'] = dataset.config.subset_type
+    if dataset:
+        kws['subset_type'] = dataset.config.subset_type
+    else:
+        kws['subset_type'] = subset_type
     trainer = VertexTrainer24x6(project_name='vertex_24x6', config_name='confmod_auto_encoder.json', 
                                 subconfig_name='AUTO_ENCODER_VERTEX_24X6', dataset=dataset, load_from=load_from,
                                 config_kwargs=kws)
@@ -271,23 +275,21 @@ def evaluate_and_report(train_results: dict[str, Any], test_filename: str, train
     report_results(results, target_slice, slice_at, axis, nrows, ncols)
 
 
-def predict_all(dataset: AutoEncoderVertex24x6Dataset, file_paths:tuple[list[str], int], vertices: dict[str, np.ndarray], 
-                path_train: str, save_path: str, config_kwargs: dict[str, Any], dataset_kwargs: dict[str, Any], 
-                encode_only: bool, all_vertices: bool = False) -> list[np.ndarray]:
-    trainer = init_trainer(config_kwargs, dataset, dataset_kwargs, load_from=save_path)
+def predict_all(file_paths: list[str], vertices: dict[str, np.ndarray], save_path: str, 
+                config_kwargs: dict[str, Any], dataset_kwargs: dict[str, Any], encode_only: bool, 
+                subset_type: str|list[str]|None = None) -> list[np.ndarray]:
+    trainer = init_trainer(config_kwargs, dataset_kwargs=dataset_kwargs, subset_type=subset_type, load_from=save_path)
     ckpt_path = trainer.init_trainer(train_mode=TrainerModes.JUPYTER, load_from=save_path)
     preds = []
-    fps = file_paths if all_vertices else get_test_filepaths(path_train, dataset)
-    for fp in tqdm(fps):
+    for fp in tqdm(file_paths):
         vertex = vertices[fp]
         pred = trainer.predict(fp, vertex, encode_only=encode_only)
         preds.append(pred)
     return preds
 
 
-def mean_rmse(file_paths:tuple[list[str], int], vertices: dict[str, np.ndarray], path_train: str, save_path: str, 
-              dataset: AutoEncoderVertex24x6Dataset|None = None, plot: bool = False) -> dict[float, float]:
-    true_fps = file_paths if dataset is None else get_test_filepaths(path_train, dataset)
+def mean_rmse(file_paths: list[str], vertices: dict[str, np.ndarray], save_path: str, plot: bool = False) -> dict[float, float]:
+    true_fps = file_paths
     true_dir = Path(file_paths[0]).parent.as_posix()
     pred_dir = f'{save_path}/predictions'
     filenames = [Path(fp).stem for fp in sorted(true_fps)]
