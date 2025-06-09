@@ -318,7 +318,7 @@ class BaseTrainer(Generic[T, S, R]):
             if ckpt_path:
                 self.wrapper = self.config.model_wrapper.load_from_checkpoint(ckpt_path, config=self.config, 
                                                                             in_dim=self.input_size)
-        else:
+        if self.wrapper is None:
             self.wrapper = self.config.model_wrapper(self.config, self.input_size)
         self.wrapper.encode_only = encode_only
         if predict:

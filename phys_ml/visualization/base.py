@@ -1,44 +1,50 @@
+import json
+
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from scipy.ndimage import gaussian_filter1d
+from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 
 COLORS = ['tab:pink', 'tab:green', 'tab:blue', 'r', 'tab:orange', 'c', 'y', 'tab:purple', 
           'tab:brown', 'tab:olive']
 
 
-def load_tensorboard_files(data_files: list[str], n_epochs: int = 1000, 
-                           normalize_y: bool = False) -> list[pd.DataFrame]:
-    dfs = []
-    for fp in data_files:
-        df = pd.read_csv(fp)
-        e_min = df['Step'].min()
-        df['epoch'] = ((df['Step'] - e_min) / (df['Step'].max() - e_min) * n_epochs).astype(int)
-        if normalize_y:
-            v_min = df['Value'].min()
-            df['Value'] = (df['Value'] - v_min) / (df['Value'].max() - v_min)
-        dfs.append(df)
-    return dfs
+def get_cmap(n, name='hsv'):
+    return plt.get_cmap(name, n)
 
 
-def plot_training_progress(train_data_files: list[str], val_data_files: list[str], labels: list[str], 
-                           title: str, n_epochs: int = 1000, figsize: tuple[int, int] = (10, 4),
-                           normalize_y: bool = False, smooth: int = 4, y_max: float = 0.2, y_min: float = 0., 
-                           alpha: float = 0.3):
-    dfs_train = load_tensorboard_files(train_data_files, n_epochs, normalize_y)
-    dfs_val = load_tensorboard_files(val_data_files, n_epochs, normalize_y)
-    dfs = [dfs_train, dfs_val]
-    titles = ['Training Loss', 'Validation Loss']
-    
-    fig, axs = plt.subplots(1, 2, figsize=figsize)
-    for i, dfs in enumerate(dfs):
-        for j, df in enumerate(dfs):
-            axs[i].plot(df['epoch'], gaussian_filter1d(df['Value'], smooth), label=labels[j], color=COLORS[j])
-            axs[i].plot(df['epoch'], df['Value'], color=COLORS[j], alpha=alpha)
-        axs[i].set_ylim((y_min, y_max))
-        axs[i].set_title(titles[i])
-    fig.suptitle(title)
-    fig.tight_layout()
-    plt.legend()
+def get_tensorboard_data(base_path: str, folders: list[str], labels: list[str]) -> pd.DataFrame:
+    events_df = pd.DataFrame()
+    for folder, label in zip(folders, labels):
+        event_acc = EventAccumulator(base_path + folder)
+        event_acc.Reload()
+        df = pd.DataFrame(event_acc.Scalars('val_loss'))
+        df['run'] = label
+        df_epoch = pd.DataFrame(event_acc.Scalars('epoch'))
+        df_epoch['epoch'] = df_epoch['value'].astype(int)
+        df = df.merge(df_epoch[['step', 'epoch']], on='step', how='left')
+        events_df = pd.concat([events_df, df], ignore_index=True)
+    return events_df
+
+
+def plot_loss_progress(tensorboard_data: pd.DataFrame, labels: list[str], figsize: tuple[int, int] = (8, 4),
+                       smooth: int = 4, y_max: float = 0.2, y_min: float = 0., alpha: float = 0.3, log: bool = False):
+    # group events_df by 'run' and iterate through groups
+    grouped_df = tensorboard_data.groupby('run')
+    cmap = get_cmap(grouped_df.ngroups, 'hsv')
+    plt.figure(figsize=figsize)
+    for i, (label, group) in enumerate(grouped_df):
+        plt.plot(group['epoch'], gaussian_filter1d(group['value'], smooth), label=label, color=cmap(i))
+        plt.plot(group['epoch'], group['value'], color=cmap(i), alpha=alpha)
+    plt.xlabel('epoch')
+    plt.ylabel('loss')
+    if log:
+        plt.yscale('log')
+    else:
+        plt.ylim((y_min, y_max))
+    plt.title('Validation Loss')
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
     plt.show()

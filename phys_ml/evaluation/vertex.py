@@ -48,7 +48,7 @@ def process_vertex(cor_mat: np.ndarray, i: int, fp2_idcs: list[list[int]],
         # v1n, v2n = vertex1 - vertex1.mean(), vertex2 - vertex2.mean()
         # cor_mat[i, j] = cor_mat[j, i] = np.sum(v1n * v2n) / np.sqrt(np.sum(v1n**2) * np.sum(v2n**2))
         z1, z2 = vertex1.flatten(), vertex2.flatten()
-        cor_mat[i, j] = cor_mat[j, i] = (z1 / np.sqrt(z1 * z1)) * (z2 / np.sqrt(z2 * z2))
+        cor_mat[i, j] = cor_mat[j, i] = np.dot((z1 / np.linalg.norm(z1)), (z2 / np.linalg.norm(z2)))
     del vertex1
 
 
@@ -115,9 +115,9 @@ def make_dataset(vertices: dict[str, np.ndarray], sample_count_per_vertex: int, 
 
 
 def get_test_filepaths(path_train: str, train_dataset: AutoEncoderVertex24x6Dataset) -> list[str]:
-    if str(type(train_dataset)) == 'phys_ml.load_data.vertex.AutoEncoderVertex24x6Dataset':
+    if train_dataset.__class__.__name__ == 'AutoEncoderVertex24x6Dataset':
         file_paths = train_dataset.file_paths
-    elif str(type(train_dataset)) == 'phys_ml.load_data.vertex.AutoEncoder24x6InfoNCEDataset':
+    elif train_dataset.__class__.__name__ == 'AutoEncoder24x6InfoNCEDataset':
         file_paths = train_dataset.file_paths_by_phase.melt().drop_duplicates()['value'].tolist()
     else:
         raise ValueError(f"Unknown dataset type: {type(train_dataset)}")
@@ -277,8 +277,9 @@ def evaluate_and_report(train_results: dict[str, Any], test_filename: str, train
 
 def predict_all(file_paths: list[str], vertices: dict[str, np.ndarray], save_path: str, 
                 config_kwargs: dict[str, Any], dataset_kwargs: dict[str, Any], encode_only: bool, 
-                subset_type: str|list[str]|None = None) -> list[np.ndarray]:
-    trainer = init_trainer(config_kwargs, dataset_kwargs=dataset_kwargs, subset_type=subset_type, load_from=save_path)
+                subset_type: str|list[str]|None = None, device_type: Literal['cpu', 'gpu'] = 'gpu') -> list[np.ndarray]:
+    trainer = init_trainer(config_kwargs, dataset_kwargs=dataset_kwargs, subset_type=subset_type, device_type=device_type, 
+                           load_from=save_path)
     ckpt_path = trainer.init_trainer(train_mode=TrainerModes.JUPYTER, load_from=save_path)
     preds = []
     for fp in tqdm(file_paths):
