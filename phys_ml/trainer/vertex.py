@@ -24,6 +24,13 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
     
     def predict(self, vertex_path: str, new_vertex: np.ndarray|None = None, train_mode: TrainerModes|None = None, 
                 load_from: Literal['best', 'last']|str|None = None, encode_only: bool = False):
+        # load and return if prediction already exists
+        subfolder = 'latentspaces' if encode_only else 'predictions'
+        pred_filename = Path(vertex_path).stem
+        pred_path = self.get_full_save_path() / subfolder / f'{pred_filename}.npy'
+        if pred_path.exists():
+            return np.load(pred_path)
+        
         dataset = self.config.predict_dataset(self.config, vertex_path, new_vertex)
         dataloader = self.data_loader(dataset, batch_size=self.config.batch_size, 
                                       num_workers=self.config.num_dataloader_workers, 
@@ -42,8 +49,7 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
         
         # save results to disk
         pred_vertex = self.wrapper.pred_vertex.cpu().numpy()
-        subfolder = 'latentspaces' if encode_only else 'predictions'
-        self.save_prediction(pred_vertex, Path(vertex_path).stem, subfolder)
+        self.save_prediction(pred_vertex, pred_filename, subfolder)
         return pred_vertex
     
     def prepare_prediction_matrix(self, in_length: int, out_dim: int, encode_only: bool = False, 

@@ -20,6 +20,7 @@ from ..load_data.vertex import AutoEncoderVertexDataset, AutoEncoderVertex24x6Da
 from ..trainer import TrainerModes
 from ..trainer.vertex import VertexTrainer, VertexTrainer24x6
 from ..visualization import vertex_visualization as vertvis
+from ..util import is_notebook
 
 
 
@@ -277,12 +278,16 @@ def evaluate_and_report(train_results: dict[str, Any], test_filename: str, train
 
 def predict_all(file_paths: list[str], vertices: dict[str, np.ndarray], save_path: str, 
                 config_kwargs: dict[str, Any], dataset_kwargs: dict[str, Any], encode_only: bool, 
-                subset_type: str|list[str]|None = None, device_type: Literal['cpu', 'gpu'] = 'gpu') -> list[np.ndarray]:
+                subset_type: str|list[str]|None = None, device_type: Literal['cpu', 'gpu'] = 'gpu',
+                train_mode: TrainerModes = TrainerModes.JUPYTER) -> list[np.ndarray]:
     trainer = init_trainer(config_kwargs, dataset_kwargs=dataset_kwargs, subset_type=subset_type, device_type=device_type, 
                            load_from=save_path)
-    ckpt_path = trainer.init_trainer(train_mode=TrainerModes.JUPYTER, load_from=save_path)
+    ckpt_path = trainer.init_trainer(train_mode=train_mode, load_from=save_path)
     preds = []
-    for fp in tqdm(file_paths):
+    iterator = file_paths
+    if is_notebook():
+        iterator = tqdm(iterator)
+    for fp in iterator:
         vertex = vertices[fp]
         pred = trainer.predict(fp, vertex, encode_only=encode_only)
         preds.append(pred)
@@ -331,5 +336,6 @@ def print_rmses(rmses: dict[float, float]):
     plt.title('RMSE of vertex reconstruction')
     plt.xlabel('tp')
     plt.ylabel('RMSE')
+    plt.legend()
     plt.grid()
     plt.show()
