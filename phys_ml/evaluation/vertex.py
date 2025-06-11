@@ -333,6 +333,7 @@ def print_rmses(rmses: dict[float, float]):
     plt.figure(figsize=(8, 4))
     plt.plot(list(rmses.keys()), errors, marker='o')
     plt.axhline(y=mean_rmse, color='r', linestyle='--', label='mean')
+    plt.xlim(-0.02, 0.52)
     plt.title('RMSE of vertex reconstruction')
     plt.xlabel('tp')
     plt.ylabel('RMSE')
