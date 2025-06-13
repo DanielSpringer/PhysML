@@ -27,7 +27,7 @@ from phys_ml.trainer.vertex import VertexTrainer24x6
 
 
 class PhaseClassification:
-    def __init__(self, model_path: str, models: list[BaseEstimator], version: int, 
+    def __init__(self, model_path: str, models: list[BaseEstimator], version: str, 
                  mode: Literal['c', 'r'] = 'c', batch_size: int = 2048):
         self.mode = mode
         self.models = models
@@ -80,7 +80,7 @@ class PhaseClassification:
         for model in tqdm(self.models, desc='Fit models', leave=False):
             try:
                 model.fit(inputs, targets)
-                with open(f'{self.version:02}_{repr(model)}.pkl','wb') as f:
+                with open(f'{self.version}_{repr(model)}.pkl','wb') as f:
                     pickle.dump(model,f)
             except Exception as e:
                 print(f'Could not fit model {repr(model)}:\n\t{e}')
@@ -91,7 +91,7 @@ class PhaseClassification:
                 check_is_fitted(model)
             except:
                 try:
-                    with open(f'{self.version:02}_{repr(model)}.pkl', 'rb') as f:
+                    with open(f'{self.version}_{repr(model)}.pkl', 'rb') as f:
                         self.models[i] = pickle.load(f)
                 except:
                     print(f'Model {repr(model)} is not fitted and could not be loaded. '
