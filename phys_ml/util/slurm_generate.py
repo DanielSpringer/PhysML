@@ -12,7 +12,7 @@ from ..config import Config
 
 @dataclass
 class SlurmOptions:
-    mail_type: str = 'BEGIN'
+    mail_type: str = 'BEGIN,END,FAIL'         # see https://slurm.schedmd.com/sbatch.html#OPT_mail_type
     mail_user: str = '<email@address.at>'
     qos: str = 'zen3_0512_a100x2_devel'       # see available resources on VSC via `sqos`-command
     time: str = '00:10:00'                    # must be <= '00:10:00' for '_devel' nodes
