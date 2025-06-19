@@ -7,6 +7,7 @@ import re
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from collections.abc import Callable
 from pathlib import Path
@@ -19,7 +20,7 @@ from ..config import Vertex24x6Config
 from ..load_data.vertex import AutoEncoderVertexDataset, AutoEncoderVertex24x6Dataset
 from ..trainer import TrainerModes
 from ..trainer.vertex import VertexTrainer, VertexTrainer24x6
-from ..visualization import vertex_visualization as vertvis
+from ..visualization import base as vis, vertex_visualization as vertvis
 from ..util import is_notebook
 
 
@@ -310,7 +311,7 @@ def mean_rmse(file_paths: list[str], vertices: dict[str, np.ndarray], save_path:
                                 in zip([(k, c) for k in other_ks for c in ['x', 'y']], slice_at)])
 
     rmses: dict[float, float] = {}
-    for fn in tqdm(filenames):
+    for fn in tqdm(filenames, desc='Computing RMSE', leave=False):
         tp = float(fn[2:6])
         true = vertices[f'{true_dir}/{fn}.h5']
         pred = np.load(f'{pred_dir}/{fn}.npy')
@@ -340,3 +341,79 @@ def print_rmses(rmses: dict[float, float]):
     plt.legend()
     plt.grid()
     plt.show()
+
+
+def plot_all_rmses(rmses: pd.DataFrame, subgrouping: Literal['ld', 's'], figsize: tuple[int, int] = (6,4), alpha: float = 0.4, 
+                   width: float = 0.5):
+    plt.figure(figsize=figsize)
+
+    # Sort run_ids and lds for consistent plotting
+    run_ids = sorted(rmses['run_id'].unique())
+    subgroups = sorted(rmses[subgrouping].unique())
+    sg_name = 'latent dimension' if subgrouping == 'ld' else 'sample count'
+
+    positions = []
+    labels = []
+    data_to_plot = []
+    color_list = []
+
+    alpha = alpha
+    width = width
+    big_gap = 2 * width  # gap between run_id groups
+    pos = 0
+    small_gap = width * 1.5  # gap within group of boxplots
+
+    for run_id in run_ids:
+        for i, subgroup in enumerate(subgroups):
+            subset = rmses[(rmses['run_id'] == run_id) & (rmses[subgrouping] == subgroup)]['rmse']
+            if not subset.empty:
+                data_to_plot.append(subset)
+                positions.append(pos)
+                labels.append(f"run {run_id}\n{subgrouping}={subgroup}")
+                color_list.append(vis.COLORS[i])
+                pos += small_gap
+        pos += big_gap  # add gap after each run_id group
+
+    box = plt.boxplot(data_to_plot, positions=positions, widths=width, patch_artist=True)
+    for path_patch, color in zip(box['boxes'], color_list):
+        path_patch.set_facecolor(color)
+        path_patch.set_alpha(alpha)
+    plt.title(f'RMSE for different {sg_name}s and runs')
+    plt.xlabel(f'run ID & {sg_name}')
+    plt.ylabel('RMSE')
+    plt.xticks(positions, labels, rotation=90)
+    plt.tight_layout()
+    plt.show()
+
+    return rmses.groupby(['run_id', subgrouping]).mean()
+
+
+def plot_classification_results(classifications: pd.DataFrame, subgrouping: Literal['ld', 's'], figsize: tuple[int, int] = (6,4), 
+                                alpha: float = 0.4, width: float = 0.5):
+    sg_name = 'latent dimension' if subgrouping == 'ld' else 'sample count'
+    pos = 0
+    positions = []
+    labels = []
+
+    fig, ax = plt.subplots(figsize=figsize)
+    for i, (run_id, group) in enumerate(classifications.groupby('run_id')):
+        subpos = []
+        for j, (_, row) in enumerate(group.iterrows()):
+            label = f"{subgrouping}={row[subgrouping]}" if i == 0 else None
+            ax.bar(pos, row['f1'], width=width, label=label, color=vis.COLORS[j], alpha=alpha)
+            subpos.append(pos)
+            pos += width
+        positions.append(np.mean(subpos))
+        labels.append(f"run {run_id}")
+        pos += width / 4
+    
+    ax.set_xlabel('run ID')
+    ax.set_ylabel('f1 score')
+    ax.set_title(f'Classification results for different {sg_name}s and runs')
+    ax.legend(title=sg_name, loc='lower right')
+    ax.set_xticks(positions, labels)
+    ax.tick_params(axis='x', which='both',length=0)
+    ax.set_ylim(int(classifications['f1'].min() * 20) / 20 - 0.06, 1.01)
+    plt.show()
+
+    return classifications.set_index(['run_id', subgrouping])

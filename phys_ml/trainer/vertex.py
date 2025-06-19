@@ -48,7 +48,7 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
         self.trainer.predict(self.wrapper, dataloader, return_predictions=False, ckpt_path=ckpt_path)
         
         # save results to disk
-        pred_vertex = self.wrapper.pred_vertex.cpu().numpy()
+        pred_vertex = self.wrapper.pred_vertex.numpy()  # .cpu().numpy()
         self.save_prediction(pred_vertex, pred_filename, subfolder)
         return pred_vertex
     
@@ -62,7 +62,7 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
             pred_vertex = np.zeros(tuple(shape))
         else:
             pred_vertex = np.zeros((in_length,) * out_dim)
-        return torch.tensor(pred_vertex, dtype=torch.float32).to(device)
+        return torch.tensor(pred_vertex, dtype=torch.float32)  #.to(device)
     
     def load_latentspace(self, save_path: str|None = None, 
                          file_name: str|None = None) -> np.ndarray|None:

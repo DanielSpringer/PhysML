@@ -37,13 +37,13 @@ class VertexWrapper(BaseWrapper[AutoEncoderVertex, VertexConfig]):
             pred = self.model.encode(inputs)
             if self.pred_vertex is not None:
                 self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, 
-                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred
+                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred.cpu()
             return pred
         else:
             pred = self.model(inputs)
             if self.pred_vertex is not None:
                 self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, 
-                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred
+                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred.cpu()
             return pred
 
 
@@ -89,11 +89,11 @@ class VertexWrapper24x6InfoNCE(VertexWrapper24x6):
             pred = self.model.encode(inputs)
             if self.pred_vertex is not None:
                 self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, 
-                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred
+                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred.cpu()
             return pred
         else:
             pred, latent = self.model(inputs)
             if self.pred_vertex is not None:
                 self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, 
-                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred
+                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred.cpu()
             return pred

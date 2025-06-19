@@ -85,7 +85,7 @@ class PhaseClassification:
             except Exception as e:
                 print(f'Could not fit model {repr(model)}:\n\t{e}')
 
-    def load_models(self):
+    def load_models(self, verbose: bool = False):
         for i, model in enumerate(self.models):
             try:
                 check_is_fitted(model)
@@ -94,8 +94,9 @@ class PhaseClassification:
                     with open(f'{self.version}_{repr(model)}.pkl', 'rb') as f:
                         self.models[i] = pickle.load(f)
                 except:
-                    print(f'Model {repr(model)} is not fitted and could not be loaded. '
-                          'Call train() before using the PhaseClassifier.')
+                    if verbose:
+                        print(f'Model {repr(model)} is not fitted and could not be loaded. '
+                            'Call train() before using the PhaseClassifier.')
 
     def evaluate_model(self, model, test_ls_vectors: np.ndarray, test_targets: list[int|float], labels: list[str],
                        print_conf_mat: bool = True, 
@@ -141,7 +142,7 @@ class PhaseClassification:
     def evaluate_classifiers(self, dataset: AutoEncoderVertex24x6Dataset, print_conf_mat: bool = True,
                              normalize: Literal['true', 'pred', 'all'] = 'true') \
                                 -> dict[str, tuple[dict[str, float], np.ndarray]]:
-        self.load_models()
+        self.load_models(verbose=True)
         results = {}
         inputs, targets = self.load_data(dataset)
         labels = list(dataset.phase_borders.keys())
