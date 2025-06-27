@@ -6,8 +6,10 @@ import pickle
 import re
 
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 from collections.abc import Callable
 from pathlib import Path
@@ -17,7 +19,7 @@ from tqdm.notebook import tqdm
 
 from .. import metrics
 from ..config import Vertex24x6Config
-from ..load_data.vertex import AutoEncoderVertexDataset, AutoEncoderVertex24x6Dataset
+from ..load_data.vertex import *
 from ..trainer import TrainerModes
 from ..trainer.vertex import VertexTrainer, VertexTrainer24x6
 from ..visualization import base as vis, vertex_visualization as vertvis
@@ -80,6 +82,37 @@ def vertex_correlation(vertex_dir: str, paths_or_vertices: list[np.ndarray]|list
     fname = '_'.join(['cor_mat_vertex24x6', save_suffix])
     np.save(f'{fname}.npy', cor_mat)
     return cor_mat
+
+
+
+# ----------------------------------------------------------------------------------------------
+# VERTEX ANALYSIS
+# ----------------------------------------------------------------------------------------------
+def vertex_statistics(data_dir: str) -> pd.DataFrame:
+    data = {'afm': None, 'sc': None, 'fm': None}
+    df = pd.DataFrame(index=['afm', 'sc', 'fm'], columns=['min', 'max', 'mean', 'sum', 'std'])
+    filepath_dict = AutoEncoder24x6InfoNCEDataset.get_filepaths(data_dir, subset=None, subset_shuffle=False)
+    for phase in data.keys():
+        vertices = [AutoEncoderVertex24x6Dataset.load_from_file(f) for f in filepath_dict[phase]]
+        values = np.concatenate(vertices, axis=None)
+        data[phase] = values
+        df.loc[phase] = [values.min(), values.max(), values.mean(), values.sum(), values.std()]
+
+    for phase in data.keys():
+        plt.figure(figsize=(12, 3))
+        plt.hist(data[phase], bins=100, density=True, rwidth=0.9, label=phase)
+        plt.xlim(-32, 32)
+        plt.legend()
+        plt.show()
+
+    for phase in data.keys():
+        plt.figure(figsize=(12, 3))
+        plt.hist(data[phase], bins=100, density=True, log=True, rwidth=0.9, label=phase)
+        plt.xlim(-32, 32)
+        plt.legend()
+        plt.show()
+    
+    return df
 
 
 
@@ -327,7 +360,7 @@ def mean_rmse(file_paths: list[str], vertices: dict[str, np.ndarray], save_path:
     return rmses
 
 
-def print_rmses(rmses: dict[float, float]):
+def print_rmses(rmses: dict[float, float], run_name: str):
     errors = list(rmses.values())
     mean_rmse = np.mean(errors)
     print(f'mean: {mean_rmse}, min: {min(errors)}, max: {max(errors)}')
@@ -335,7 +368,7 @@ def print_rmses(rmses: dict[float, float]):
     plt.plot(list(rmses.keys()), errors, marker='o')
     plt.axhline(y=mean_rmse, color='r', linestyle='--', label='mean')
     plt.xlim(-0.02, 0.52)
-    plt.title('RMSE of vertex reconstruction')
+    plt.title(f'reconstruction RMSE for {run_name}')
     plt.xlabel('tp')
     plt.ylabel('RMSE')
     plt.legend()
@@ -343,10 +376,7 @@ def print_rmses(rmses: dict[float, float]):
     plt.show()
 
 
-def plot_all_rmses(rmses: pd.DataFrame, subgrouping: Literal['ld', 's'], figsize: tuple[int, int] = (6,4), alpha: float = 0.4, 
-                   width: float = 0.5):
-    plt.figure(figsize=figsize)
-
+def _plot_rmses(ax: Axes, rmses: pd.DataFrame, subgrouping: Literal['ld', 's'], alpha: float = 0.4, width: float = 0.5):
     # Sort run_ids and lds for consistent plotting
     run_ids = sorted(rmses['run_id'].unique())
     subgroups = sorted(rmses[subgrouping].unique())
@@ -357,12 +387,9 @@ def plot_all_rmses(rmses: pd.DataFrame, subgrouping: Literal['ld', 's'], figsize
     data_to_plot = []
     color_list = []
 
-    alpha = alpha
-    width = width
     big_gap = 2 * width  # gap between run_id groups
     pos = 0
     small_gap = width * 1.5  # gap within group of boxplots
-
     for run_id in run_ids:
         for i, subgroup in enumerate(subgroups):
             subset = rmses[(rmses['run_id'] == run_id) & (rmses[subgrouping] == subgroup)]['rmse']
@@ -373,29 +400,55 @@ def plot_all_rmses(rmses: pd.DataFrame, subgrouping: Literal['ld', 's'], figsize
                 color_list.append(vis.COLORS[i])
                 pos += small_gap
         pos += big_gap  # add gap after each run_id group
-
     box = plt.boxplot(data_to_plot, positions=positions, widths=width, patch_artist=True)
     for path_patch, color in zip(box['boxes'], color_list):
         path_patch.set_facecolor(color)
         path_patch.set_alpha(alpha)
-    plt.title(f'RMSE for different {sg_name}s and runs')
-    plt.xlabel(f'run ID & {sg_name}')
-    plt.ylabel('RMSE')
-    plt.xticks(positions, labels, rotation=90)
+    ax.set_title(f'RMSE for different {sg_name}s and runs')
+    ax.set_xlabel(f'run ID & {sg_name}')
+    ax.set_ylabel('RMSE')
+    ax.set_xticks(positions, labels, rotation=90)
+
+
+def plot_all_rmses(rmses: pd.DataFrame, train_data: bool = True, figsize: tuple[int, int] = (6,4), 
+                   alpha: float = 0.4, width: float = 0.5):
+    fig, axs = plt.subplots(1, 2, figsize=figsize)
+    rmses_ld = rmses[rmses['s'] == 24000]
+    rmses_s = rmses[rmses['ld'] == 32]
+    if not train_data:
+        rmses_ld = rmses_ld[rmses_ld['train_data'] == False]
+        rmses_s = rmses_s[rmses_s['train_data'] == False]
+    _plot_rmses(axs[0], rmses_ld, 'ld', alpha, width)
+    _plot_rmses(axs[1], rmses_s, 's', alpha, width)
     plt.tight_layout()
     plt.show()
+    return rmses.groupby(['run_id', 'ld', 's']).mean()
 
-    return rmses.groupby(['run_id', subgrouping]).mean()
 
 
-def plot_classification_results(classifications: pd.DataFrame, subgrouping: Literal['ld', 's'], figsize: tuple[int, int] = (6,4), 
-                                alpha: float = 0.4, width: float = 0.5):
+# ----------------------------------------------------------------------------------------------
+# EVALUATE PHASE CLASSIFIER
+# ----------------------------------------------------------------------------------------------
+def print_conf_mat(conf_mat: np.ndarray, name: str, labels: list[str], figsize: tuple[int, int] = (6, 6)):
+    font_size = 14
+    fig, ax = plt.subplots(figsize=figsize)
+    ax = sns.heatmap(conf_mat, annot=True, xticklabels=labels, yticklabels=labels, 
+                        vmin=0.0, vmax=1.0, fmt=".2f", ax=ax, square=True, annot_kws={"size": font_size})
+    ax.tick_params(left=False, bottom=False)
+    plt.xticks(fontsize=font_size)
+    plt.yticks(fontsize=font_size)
+    plt.title(name, fontsize=font_size + 2)
+    plt.xlabel('predicted', fontsize=font_size)
+    plt.ylabel('true', fontsize=font_size)
+    plt.show()
+
+
+def _plot_classification(ax: Axes, classifications: pd.DataFrame, subgrouping: Literal['ld', 's'], alpha: float = 0.4, 
+                         width: float = 0.5):
     sg_name = 'latent dimension' if subgrouping == 'ld' else 'sample count'
     pos = 0
     positions = []
     labels = []
-
-    fig, ax = plt.subplots(figsize=figsize)
     for i, (run_id, group) in enumerate(classifications.groupby('run_id')):
         subpos = []
         for j, (_, row) in enumerate(group.iterrows()):
@@ -406,7 +459,6 @@ def plot_classification_results(classifications: pd.DataFrame, subgrouping: Lite
         positions.append(np.mean(subpos))
         labels.append(f"run {run_id}")
         pos += width / 4
-    
     ax.set_xlabel('run ID')
     ax.set_ylabel('f1 score')
     ax.set_title(f'Classification results for different {sg_name}s and runs')
@@ -414,6 +466,14 @@ def plot_classification_results(classifications: pd.DataFrame, subgrouping: Lite
     ax.set_xticks(positions, labels)
     ax.tick_params(axis='x', which='both',length=0)
     ax.set_ylim(int(classifications['f1'].min() * 20) / 20 - 0.06, 1.01)
-    plt.show()
 
-    return classifications.set_index(['run_id', subgrouping])
+
+def plot_classification_results(classifications: pd.DataFrame, figsize: tuple[int, int] = (6,4), alpha: float = 0.4, 
+                                width: float = 0.5):
+    fig, axs = plt.subplots(1, 2, figsize=figsize)
+    classifications_ld = classifications.drop(columns='conf_mat')[classifications['s'] == 24000]
+    classifications_s = classifications.drop(columns='conf_mat')[classifications['ld'] == 32]
+    _plot_classification(axs[0], classifications_ld, 'ld', alpha, width)
+    _plot_classification(axs[1], classifications_s, 's', alpha, width)
+    plt.show()
+    return classifications.set_index(['run_id', 'ld', 's'])

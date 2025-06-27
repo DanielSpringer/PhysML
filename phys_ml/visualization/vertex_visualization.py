@@ -162,12 +162,34 @@ def lineplot_compare(data: dict[int, np.ndarray], target: np.ndarray|None = None
 
 
 def lineplot(x_list: Iterable[Iterable], y_list: Iterable[Iterable], labels: list|None = None,
-             title: str|None = None, figSize: tuple[int, int] = (10,4), lim=None, 
+             title: str|None = None, figsize: tuple[int, int] = (10,4), lim=None, 
              xlabel: str|None = None, ylabel: str|None = None, xticks: list|None = None):
-    plt.figure(figsize=figSize)
+    plt.figure(figsize=figsize)
     for i, (x, y) in enumerate(zip(x_list, y_list)):
         plt.plot(x, y, color=color_cycle[i], label=labels[i] if labels else None)
     _set_lineplot(bool(labels), title, lim, xlabel, ylabel, xticks)
+    plt.show()
+
+
+def plot_compare_slices(vertices: list[np.ndarray], figsize: tuple[int, int] = (12, 8)):
+    i = 23
+    axis, slice_at = 5, (i, i, i, i)
+    nrows, ncols = 3, 3
+    vertex_phases = ['AFM', 'SC', 'FM']
+
+    fig, axs = plt.subplots(nrows, ncols, figsize=figsize, layout='compressed', subplot_kw={'aspect': 'equal'})
+    axs = axs.flatten()
+    vmin, vmax = -1, 31 # min([np.nanmin(v) for v in vertices]), max([np.nanmax(v) for v in vertices])
+    for i, vertex in enumerate(vertices):
+        for ki in range(1, 4):
+            ax = axs[i * ncols + (ki - 1)]
+            axis = ki * 2
+            data = get_mat_slice(vertex, axis, slice_at)
+            img = _create_plot(ax, data, axis, vmin=vmin, vmax=vmax)
+            label = f'{vertex_phases[i]} $k_{ki}$'
+            ax.set_title(label)
+    fig.colorbar(img, ax=axs)
+    fig.suptitle(f'Visualization of vertices sliced at coordinates {slice_at}')
     plt.show()
 
 
@@ -183,3 +205,4 @@ def plot_correlation(cor_mat: np.ndarray, title: str):
     plt.ylabel('tp')
     plt.tight_layout()
     plt.show()
+
