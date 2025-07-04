@@ -79,7 +79,9 @@ def vertex_correlation(vertex_dir: str, paths_or_vertices: list[np.ndarray]|list
         loop.run_until_complete(looper)
 
     # save result
-    fname = '_'.join(['cor_mat_vertex24x6', save_suffix])
+    fname = 'cor_mat_vertex24x6'
+    if save_suffix:
+        fname += f'_{save_suffix}'
     np.save(f'{fname}.npy', cor_mat)
     return cor_mat
 
