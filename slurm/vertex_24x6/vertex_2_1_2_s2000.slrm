@@ -1,8 +1,8 @@
 #!/bin/bash
 #
 #SBATCH -J vertex_24x6
-#SBATCH --mail-type=BEGIN    # first have to state the type of event to occur 
-#SBATCH --mail-user=<email@address.at>    # and then your email address
+#SBATCH --mail-type=BEGIN,END,FAIL    # first have to state the type of event to occur 
+#SBATCH --mail-user=e1015083@student.tuwien.ac.at    # and then your email address
 
 #SBATCH --partition=zen3_0512_a100x2
 #SBATCH --qos=zen3_0512_a100x2

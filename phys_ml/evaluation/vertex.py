@@ -402,11 +402,11 @@ def _plot_rmses(ax: Axes, rmses: pd.DataFrame, subgrouping: Literal['ld', 's'], 
                 color_list.append(vis.COLORS[i])
                 pos += small_gap
         pos += big_gap  # add gap after each run_id group
-    box = plt.boxplot(data_to_plot, positions=positions, widths=width, patch_artist=True)
+    box = ax.boxplot(data_to_plot, positions=positions, widths=width, patch_artist=True)
     for path_patch, color in zip(box['boxes'], color_list):
         path_patch.set_facecolor(color)
         path_patch.set_alpha(alpha)
-    ax.set_title(f'RMSE for different {sg_name}s and runs')
+    ax.set_title(f'RMSE for {sg_name}s and runs')
     ax.set_xlabel(f'run ID & {sg_name}')
     ax.set_ylabel('RMSE')
     ax.set_xticks(positions, labels, rotation=90)
@@ -415,6 +415,7 @@ def _plot_rmses(ax: Axes, rmses: pd.DataFrame, subgrouping: Literal['ld', 's'], 
 def plot_all_rmses(rmses: pd.DataFrame, train_data: bool = True, figsize: tuple[int, int] = (6,4), 
                    alpha: float = 0.4, width: float = 0.5):
     fig, axs = plt.subplots(1, 2, figsize=figsize)
+    rmses = rmses.sort_values(by=['run_id', 'ld', 's'])
     rmses_ld = rmses[rmses['s'] == 24000]
     rmses_s = rmses[rmses['ld'] == 32]
     if not train_data:
@@ -424,7 +425,7 @@ def plot_all_rmses(rmses: pd.DataFrame, train_data: bool = True, figsize: tuple[
     _plot_rmses(axs[1], rmses_s, 's', alpha, width)
     plt.tight_layout()
     plt.show()
-    return rmses.groupby(['run_id', 'ld', 's']).mean()
+    return rmses.drop(columns=['tp', 'train_data']).groupby(['run_id', 'ld', 's']).mean()
 
 
 
@@ -445,8 +446,8 @@ def print_conf_mat(conf_mat: np.ndarray, name: str, labels: list[str], figsize: 
     plt.show()
 
 
-def _plot_classification(ax: Axes, classifications: pd.DataFrame, subgrouping: Literal['ld', 's'], alpha: float = 0.4, 
-                         width: float = 0.5):
+def _plot_classification(ax: Axes, classifications: pd.DataFrame, subgrouping: Literal['ld', 's'], figsize: tuple[int, int] = (6,4), 
+                         alpha: float = 0.4, width: float = 0.5):
     sg_name = 'latent dimension' if subgrouping == 'ld' else 'sample count'
     pos = 0
     positions = []
@@ -463,7 +464,7 @@ def _plot_classification(ax: Axes, classifications: pd.DataFrame, subgrouping: L
         pos += width / 4
     ax.set_xlabel('run ID')
     ax.set_ylabel('f1 score')
-    ax.set_title(f'Classification results for different {sg_name}s and runs')
+    ax.set_title(f'Classification results for {sg_name}s and runs')
     ax.legend(title=sg_name, loc='lower right')
     ax.set_xticks(positions, labels)
     ax.tick_params(axis='x', which='both',length=0)
@@ -473,9 +474,10 @@ def _plot_classification(ax: Axes, classifications: pd.DataFrame, subgrouping: L
 def plot_classification_results(classifications: pd.DataFrame, figsize: tuple[int, int] = (6,4), alpha: float = 0.4, 
                                 width: float = 0.5):
     fig, axs = plt.subplots(1, 2, figsize=figsize)
+    classifications = classifications.sort_values(by=['run_id', 'ld', 's'])
     classifications_ld = classifications.drop(columns='conf_mat')[classifications['s'] == 24000]
     classifications_s = classifications.drop(columns='conf_mat')[classifications['ld'] == 32]
     _plot_classification(axs[0], classifications_ld, 'ld', alpha, width)
     _plot_classification(axs[1], classifications_s, 's', alpha, width)
     plt.show()
-    return classifications.set_index(['run_id', 'ld', 's'])
+    return classifications.drop(columns='conf_mat').set_index(['run_id', 'ld', 's'])

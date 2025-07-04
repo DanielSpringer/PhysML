@@ -24,10 +24,20 @@ def get_tensorboard_data(base_path: str, folders: list[str], labels: list[str]) 
         df = pd.DataFrame(event_acc.Scalars('val_loss'))
         df['run'] = label
         df_epoch = pd.DataFrame(event_acc.Scalars('epoch'))
-        df_epoch['epoch'] = df_epoch['value'].astype(int)
+        df_epoch['epoch'] = df_epoch['value']
         df = df.merge(df_epoch[['step', 'epoch']], on='step', how='left')
         events_df = pd.concat([events_df, df], ignore_index=True)
     return events_df
+
+
+def _tensorboard_walltimes_to_run_hours(walltimes: pd.Series) -> pd.Series:
+    return ((walltimes.max() - walltimes.min()) / 3600).round(2)
+
+
+def get_tensorboard_statistics(tensorboard_data: pd.DataFrame) -> pd.DataFrame:
+    df = tensorboard_data.groupby('run').agg({'wall_time': _tensorboard_walltimes_to_run_hours, 'epoch': 'max'})
+    df['epoch'] = df['epoch'].astype(int)
+    return df
 
 
 def plot_loss_progress(tensorboard_data: pd.DataFrame, labels: list[str], figsize: tuple[int, int] = (8, 4),
