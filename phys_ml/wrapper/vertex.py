@@ -27,6 +27,11 @@ class VertexWrapper(BaseWrapper[AutoEncoderVertex, VertexConfig]):
         self.encode_only = encode_only
         self.pred_vertex: torch.Tensor = pred_vertex
         self.replace_at = replace_at if replace_at is not None else self.config.construction_axis - 1
+
+    def write_prediciton_to_matrix(self, idcs: torch.Tensor, pred: torch.Tensor, ndims: int):
+        if self.pred_vertex is not None:
+            self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, 
+                             *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred.cpu()
     
     def predict_step(self, batch: tuple[torch.Tensor, torch.Tensor]):
         inputs, idcs = batch
@@ -35,15 +40,11 @@ class VertexWrapper(BaseWrapper[AutoEncoderVertex, VertexConfig]):
             idcs = torch.stack(idcs).T
         if self.encode_only:
             pred = self.model.encode(inputs)
-            if self.pred_vertex is not None:
-                self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, 
-                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred.cpu()
+            self.write_prediciton_to_matrix(idcs, pred, ndims)
             return pred
         else:
             pred = self.model(inputs)
-            if self.pred_vertex is not None:
-                self.pred_vertex[*[idcs[:, i] for i in range(self.replace_at)], :, 
-                                 *[idcs[:, i] for i in range(self.replace_at + 1, ndims)]] = pred.cpu()
+            self.write_prediciton_to_matrix(idcs, pred, ndims)
             return pred
 
 

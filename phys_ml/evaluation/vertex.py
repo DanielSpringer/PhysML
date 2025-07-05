@@ -93,7 +93,7 @@ def vertex_correlation(vertex_dir: str, paths_or_vertices: list[np.ndarray]|list
 def vertex_statistics(data_dir: str) -> pd.DataFrame:
     data = {'afm': None, 'sc': None, 'fm': None}
     df = pd.DataFrame(index=['afm', 'sc', 'fm'], columns=['min', 'max', 'mean', 'sum', 'std'])
-    filepath_dict = AutoEncoder24x6InfoNCEDataset.get_filepaths(data_dir, subset=None, subset_shuffle=False)
+    filepath_dict, _, _ = AutoEncoder24x6InfoNCEDataset.get_filepaths(data_dir, subset=None, subset_shuffle=False)
     for phase in data.keys():
         vertices = [AutoEncoderVertex24x6Dataset.load_from_file(f) for f in filepath_dict[phase]]
         values = np.concatenate(vertices, axis=None)
@@ -346,7 +346,10 @@ def mean_rmse(file_paths: list[str], vertices: dict[str, np.ndarray], save_path:
                                 in zip([(k, c) for k in other_ks for c in ['x', 'y']], slice_at)])
 
     rmses: dict[float, float] = {}
-    for fn in tqdm(filenames, desc='Computing RMSE', leave=False):
+    iterator = filenames
+    if is_notebook():
+        iterator = tqdm(iterator, desc='Computing RMSE', leave=False)
+    for fn in iterator:
         tp = float(fn[2:6])
         true = vertices[f'{true_dir}/{fn}.h5']
         pred = np.load(f'{pred_dir}/{fn}.npy')
@@ -362,12 +365,12 @@ def mean_rmse(file_paths: list[str], vertices: dict[str, np.ndarray], save_path:
     return rmses
 
 
-def print_rmses(rmses: dict[float, float], run_name: str):
-    errors = list(rmses.values())
+def print_rmses(rmse_df: pd.DataFrame, run_name: str):
+    errors = rmse_df['rmse']
     mean_rmse = np.mean(errors)
     print(f'mean: {mean_rmse}, min: {min(errors)}, max: {max(errors)}')
     plt.figure(figsize=(8, 4))
-    plt.plot(list(rmses.keys()), errors, marker='o')
+    plt.plot(rmse_df['tp'], errors, marker='o')
     plt.axhline(y=mean_rmse, color='r', linestyle='--', label='mean')
     plt.xlim(-0.02, 0.52)
     plt.title(f'reconstruction RMSE for {run_name}')
@@ -436,7 +439,7 @@ def print_conf_mat(conf_mat: np.ndarray, name: str, labels: list[str], figsize: 
     font_size = 14
     fig, ax = plt.subplots(figsize=figsize)
     ax = sns.heatmap(conf_mat, annot=True, xticklabels=labels, yticklabels=labels, 
-                        vmin=0.0, vmax=1.0, fmt=".2f", ax=ax, square=True, annot_kws={"size": font_size})
+                     vmin=0.0, vmax=1.0, fmt=".2f", ax=ax, square=True, annot_kws={"size": font_size})
     ax.tick_params(left=False, bottom=False)
     plt.xticks(fontsize=font_size)
     plt.yticks(fontsize=font_size)

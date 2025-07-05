@@ -4,8 +4,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 from lightning.pytorch import Trainer, LightningModule
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
@@ -25,6 +23,7 @@ from phys_ml.evaluation import vertex as verteval
 from phys_ml.load_data.base import SimpleDataset
 from phys_ml.load_data.vertex import AutoEncoderVertex24x6Dataset, AutoEncoder24x6InfoNCEDataset
 from phys_ml.trainer.vertex import VertexTrainer24x6
+from phys_ml.util import is_notebook
 
 
 class PhaseClassification:
@@ -61,7 +60,10 @@ class PhaseClassification:
         targets = []
         desc = 'Encode vertex samples' if self.encode else 'Load vertex samples'
         dataloader = DataLoader(dataset, batch_size=self.batch_size)
-        for i, (input_vectors, idcs, _, fps) in tqdm(enumerate(dataloader), desc=desc, total=len(dataloader), leave=False):
+        iterator = dataloader
+        if is_notebook():
+            iterator = tqdm(iterator, desc=desc, leave=False)
+        for input_vectors, idcs, _, fps in iterator:
             if isinstance(dataset, AutoEncoder24x6InfoNCEDataset):
                 input_vectors = input_vectors.reshape((-1, input_vectors.shape[-1]))
                 idcs = idcs.reshape((-1, idcs.shape[-1]))
@@ -78,7 +80,10 @@ class PhaseClassification:
 
     def train(self, dataset: AutoEncoderVertex24x6Dataset) -> dict[str, np.ndarray]:
         inputs, targets = self.load_data(dataset)
-        for model in tqdm(self.models, desc='Fit models', leave=False):
+        iterator = self.models
+        if is_notebook():
+            iterator = tqdm(iterator, desc='Fit models', leave=False)
+        for model in iterator:
             try:
                 model.fit(inputs, targets)
                 with open(f'{self.version}_{repr(model)}.pkl','wb') as f:
@@ -139,7 +144,10 @@ class PhaseClassification:
         results = {}
         inputs, targets = self.load_data(dataset)
         labels = list(dataset.phase_borders.keys())
-        for model in tqdm(self.models, desc='Predict', leave=False):
+        iterator = self.models
+        if is_notebook():
+            iterator = tqdm(iterator, desc='Predict', leave=False)
+        for model in iterator:
             scores, conf_mat = self.evaluate_model(model, inputs, targets, labels, print_conf_mat, normalize)
             results[repr(model)] = (scores, conf_mat)
         return results

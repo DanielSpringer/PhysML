@@ -12,18 +12,17 @@ from tqdm.notebook import tqdm
 
 
 if __name__ == '__main__':
-    latent_dims = [8, 16, 24, 32]
-    ssizes = [2000, 8000, 16000]
+    latent_dims = [8, 16, 20, 24, 32]
+    ssizes = [2000, 8000, 12000, 16000]
 
 
     # load vertices
-    path_train = '../../../frgs_6d'
+    path_train = '/gpfs/data/fs71925/shepp123/frgs_6d'
     file_paths = AutoEncoderVertex24x6Dataset.get_filepaths(path_train, subset=None, subset_shuffle=False)[0]
     vertices = AutoEncoderVertex24x6Dataset.load_vertex_files(file_paths)
 
     # autoencoder
     seed = 42
-    hidden_dims = [128, 64, 32]
     train_samples_per_vertex = 24000
     nce_train_samples = train_samples_per_vertex // 4
     test_samples_per_vertex = 2000
@@ -83,43 +82,47 @@ if __name__ == '__main__':
         # '3_2': (afm_fps, nce_train_dataset_subset, test_dataset_subset), 
         # '3_3': (fm_fps, nce_train_dataset_subset, test_dataset_subset),
     }
-    reconstruction_results = []
-    classification_results = []
+
+    save_path = '/gpfs/data/fs71925/shepp123/PhysML/notebooks/vertex/'
+    rmse_df = pd.DataFrame(columns=['run_id', 'ld', 's', 'tp', 'rmse', 'train_data'])
+    classification_df = pd.DataFrame(columns=['run_id', 'ld', 's', 'f1', 'conf_mat'])
+    try:
+        rmse_df = pd.read_csv(save_path + 'reconstruction_results.csv')
+        classification_df = pd.read_pickle(save_path + 'classification_results.pkl')
+    except:
+        pass
 
 
     # evaluate models
-    def eval(prog: tqdm, run_name: str, ld: int, s: int):
-        prog.set_description(f'Evaluating {run_name}')
-        save_path = base_path + run_name
+    def eval(run_id: str, run_name: str, ld: int, s: int):
+        model_path = base_path + run_name
 
         # reconstruction
-        rmses = verteval.mean_rmse(file_paths, vertices, save_path)
-        is_train_data = [fp not in recon_files for fp in file_paths]
-        reconstruction_results.extend([
-            {'run_id': run_id, 'ld': ld, 's': s, 'tp': tp, 'rmse': rmse, 'train_data': is_td} 
-            for is_td, (tp, rmse) in zip(is_train_data, rmses.items())
-        ])
+        if len(rmse_df[(rmse_df['run_id'] == run_id) 
+                       & (rmse_df['ld'] == ld) 
+                       & (rmse_df['s'] == s)]) < len(file_paths):
+            rmses = verteval.mean_rmse(file_paths, vertices, model_path)
+            is_train_data = [fp not in recon_files for fp in file_paths]
+            for is_td, (tp, rmse) in zip(is_train_data, rmses.items()):
+                rmse_df.loc[len(rmse_df)] = [run_id, ld, s, tp, rmse, is_td]
+            rmse_df.to_csv(save_path + 'reconstruction_results.csv', index=False)
 
         # classification
-        pc = PhaseClassification(save_path, pc_models, run_name)
-        pc.train(nce_train_dataset)
-        model_scores = pc.evaluate_classifiers(test_dataset_full, print_conf_mat=False)
-        pc_results = list(model_scores.values())[0]
-        classification_results.append({'run_id': run_id, 'ld': ld, 's': s, 'f1': pc_results[0]['f1'], 'conf_mat': pc_results[1]})
-        prog.update()
+        if classification_df[(classification_df['run_id'] == run_id)
+                             & (classification_df['ld'] == ld) 
+                             & (classification_df['s'] == s)].empty:
+            pc = PhaseClassification(model_path, pc_models, run_name)
+            pc.train(nce_train_dataset)
+            model_scores = pc.evaluate_classifiers(test_dataset_full, print_conf_mat=False)
+            pc_results = list(model_scores.values())[0]
+            classification_df.loc[len(classification_df)] = [run_id, ld, s, pc_results[0]['f1'], pc_results[1]]
+            classification_df.to_pickle(save_path + 'classification_results.pkl')
 
 
-    total = len(run_info) * len(latent_dims)
-    with tqdm(total=total, desc='Evaluation') as prog:
-        for run_id, (recon_files, train_data, test_data) in run_info.items():
-            for ld in latent_dims:
-                run_name = f'{run_id}_ld{ld}'
-                eval(prog, run_name, ld, 24_000)
-            for s in ssizes:
-                run_name = f'{run_id}_s{s}'
-                eval(prog, run_name, 32, s)
-
-    rmse_df = pd.DataFrame(reconstruction_results)
-    rmse_df.to_csv(base_path + 'reconstruction_results.csv', index=False)
-    classification_df = pd.DataFrame(classification_results)
-    classification_df.to_csv(base_path + 'classification_results.csv', index=False)
+    for run_id, (recon_files, train_data, test_data) in run_info.items():
+        for ld in latent_dims:
+            run_name = f'{run_id}_ld{ld}'
+            eval(run_id, run_name, ld, 24_000)
+        for s in ssizes:
+            run_name = f'{run_id}_s{s}'
+            eval(run_id, run_name, 32, s)
