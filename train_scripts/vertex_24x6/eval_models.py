@@ -8,7 +8,6 @@ from phys_ml.load_data.vertex import *
 import pandas as pd
 
 from sklearn import ensemble
-from tqdm.notebook import tqdm
 
 
 if __name__ == '__main__':
@@ -70,17 +69,17 @@ if __name__ == '__main__':
     # run info
     base_path = '/gpfs/data/fs71925/shepp123/PhysML/saves/vertex_24x6/run_results/'
     run_info = {
-        # '1_1': (file_paths, nce_train_dataset, test_dataset_full), 
-        # '1_2': (file_paths, nce_train_dataset, test_dataset_full), 
+        '1_1': (file_paths, nce_train_dataset, test_dataset_full), 
+        '1_2': (file_paths, nce_train_dataset, test_dataset_full), 
         '2_1_1': (ex_sc_fps, nce_train_dataset_subset, test_dataset_subset), 
         '2_1_2': (ex_sc_fps, nce_train_dataset_subset, test_dataset_subset), 
-        # '2_2_1': (ex_afm_fps, nce_train_dataset_subset, test_dataset_subset), 
-        # '2_2_2': (ex_afm_fps, nce_train_dataset_subset, test_dataset_subset), 
-        # '2_3_1': (ex_fm_fps, nce_train_dataset_subset, test_dataset_subset), 
-        # '2_3_2': (ex_fm_fps, nce_train_dataset_subset, test_dataset_subset), 
-        # '3_1': (sc_fps, nce_train_dataset_subset, test_dataset_subset), 
-        # '3_2': (afm_fps, nce_train_dataset_subset, test_dataset_subset), 
-        # '3_3': (fm_fps, nce_train_dataset_subset, test_dataset_subset),
+        '2_2_1': (ex_afm_fps, nce_train_dataset_subset, test_dataset_subset), 
+        '2_2_2': (ex_afm_fps, nce_train_dataset_subset, test_dataset_subset), 
+        '2_3_1': (ex_fm_fps, nce_train_dataset_subset, test_dataset_subset), 
+        '2_3_2': (ex_fm_fps, nce_train_dataset_subset, test_dataset_subset), 
+        '3_1': (sc_fps, nce_train_dataset_subset, test_dataset_subset), 
+        '3_2': (afm_fps, nce_train_dataset_subset, test_dataset_subset), 
+        '3_3': (fm_fps, nce_train_dataset_subset, test_dataset_subset),
     }
 
     save_path = '/gpfs/data/fs71925/shepp123/PhysML/notebooks/vertex/'
@@ -96,27 +95,27 @@ if __name__ == '__main__':
     # evaluate models
     def eval(run_id: str, run_name: str, ld: int, s: int):
         model_path = base_path + run_name
+        if os.path.exists(model_path):
+            # reconstruction
+            if len(rmse_df[(rmse_df['run_id'] == run_id) 
+                        & (rmse_df['ld'] == ld) 
+                        & (rmse_df['s'] == s)]) < len(file_paths):
+                rmses = verteval.mean_rmse(file_paths, vertices, model_path)
+                is_train_data = [fp not in recon_files for fp in file_paths]
+                for is_td, (tp, rmse) in zip(is_train_data, rmses.items()):
+                    rmse_df.loc[len(rmse_df)] = [run_id, ld, s, tp, rmse, is_td]
+                rmse_df.to_csv(save_path + 'reconstruction_results.csv', index=False)
 
-        # reconstruction
-        if len(rmse_df[(rmse_df['run_id'] == run_id) 
-                       & (rmse_df['ld'] == ld) 
-                       & (rmse_df['s'] == s)]) < len(file_paths):
-            rmses = verteval.mean_rmse(file_paths, vertices, model_path)
-            is_train_data = [fp not in recon_files for fp in file_paths]
-            for is_td, (tp, rmse) in zip(is_train_data, rmses.items()):
-                rmse_df.loc[len(rmse_df)] = [run_id, ld, s, tp, rmse, is_td]
-            rmse_df.to_csv(save_path + 'reconstruction_results.csv', index=False)
-
-        # classification
-        if classification_df[(classification_df['run_id'] == run_id)
-                             & (classification_df['ld'] == ld) 
-                             & (classification_df['s'] == s)].empty:
-            pc = PhaseClassification(model_path, pc_models, run_name)
-            pc.train(nce_train_dataset)
-            model_scores = pc.evaluate_classifiers(test_dataset_full, print_conf_mat=False)
-            pc_results = list(model_scores.values())[0]
-            classification_df.loc[len(classification_df)] = [run_id, ld, s, pc_results[0]['f1'], pc_results[1]]
-            classification_df.to_pickle(save_path + 'classification_results.pkl')
+            # classification
+            if classification_df[(classification_df['run_id'] == run_id)
+                                & (classification_df['ld'] == ld) 
+                                & (classification_df['s'] == s)].empty:
+                pc = PhaseClassification(model_path, pc_models, run_name)
+                pc.train(nce_train_dataset)
+                model_scores = pc.evaluate_classifiers(test_dataset_full, print_conf_mat=False)
+                pc_results = list(model_scores.values())[0]
+                classification_df.loc[len(classification_df)] = [run_id, ld, s, pc_results[0]['f1'], pc_results[1]]
+                classification_df.to_pickle(save_path + 'classification_results.pkl')
 
 
     for run_id, (recon_files, train_data, test_data) in run_info.items():
