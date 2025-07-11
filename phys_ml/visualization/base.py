@@ -31,7 +31,7 @@ def get_tensorboard_data(base_path: str, folders: list[str], labels: list[str]) 
 
 
 def _tensorboard_walltimes_to_run_hours(walltimes: pd.Series) -> pd.Series:
-    return ((walltimes.max() - walltimes.min()) / 3600).round(2)
+    return round((walltimes.max() - walltimes.min()) / 3600, 2)
 
 
 def get_tensorboard_statistics(tensorboard_data: pd.DataFrame) -> pd.DataFrame:
