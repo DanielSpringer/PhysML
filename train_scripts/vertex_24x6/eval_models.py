@@ -69,8 +69,8 @@ if __name__ == '__main__':
     # run info
     base_path = '/gpfs/data/fs71925/shepp123/PhysML/saves/vertex_24x6/run_results/'
     run_info = {
-        '1_1': (file_paths, nce_train_dataset, test_dataset_full), 
-        '1_2': (file_paths, nce_train_dataset, test_dataset_full), 
+        '1_1': ([], nce_train_dataset, test_dataset_full), 
+        '1_2': ([], nce_train_dataset, test_dataset_full), 
         '2_1_1': (ex_sc_fps, nce_train_dataset_subset, test_dataset_subset), 
         '2_1_2': (ex_sc_fps, nce_train_dataset_subset, test_dataset_subset), 
         '2_2_1': (ex_afm_fps, nce_train_dataset_subset, test_dataset_subset), 

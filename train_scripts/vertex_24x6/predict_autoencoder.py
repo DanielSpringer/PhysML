@@ -52,12 +52,14 @@ if __name__ == '__main__':
     for run_id, pred_config in pred_configs.items():
         for hidden_dim in hidden_dims:
             ld = hidden_dim[-1]
-            config_kwargs['hidden_dims'] = hidden_dim
             save_path = f'/gpfs/data/fs71925/shepp123/PhysML/saves/vertex_24x6/run_results/{run_id}_ld{ld}'
-            preds = verteval.predict_all(file_paths, vertices, save_path, config_kwargs, dataset_kwargs, 
-                                         encode_only=False, train_mode=TrainerModes.SLURM, **pred_config)
+            if os.path.exists(save_path):
+                config_kwargs['hidden_dims'] = hidden_dim
+                preds = verteval.predict_all(file_paths, vertices, save_path, config_kwargs, dataset_kwargs, 
+                                            encode_only=False, train_mode=TrainerModes.SLURM, **pred_config)
         for s in ssizes:
-            config_kwargs['hidden_dims'] = [128, 64, 32]
             save_path = f'/gpfs/data/fs71925/shepp123/PhysML/saves/vertex_24x6/run_results/{run_id}_s{s}'
-            preds = verteval.predict_all(file_paths, vertices, save_path, config_kwargs, dataset_kwargs, 
-                                         encode_only=False, train_mode=TrainerModes.SLURM, **pred_config)
+            if os.path.exists(save_path):
+                config_kwargs['hidden_dims'] = [128, 64, 32]
+                preds = verteval.predict_all(file_paths, vertices, save_path, config_kwargs, dataset_kwargs, 
+                                            encode_only=False, train_mode=TrainerModes.SLURM, **pred_config)
