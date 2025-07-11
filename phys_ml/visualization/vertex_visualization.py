@@ -13,7 +13,8 @@ from ..load_data.vertex import AutoEncoderVertexDataset
 
 cmap_big = mpl.colormaps['twilight_shifted'].resampled(int(1e3))
 #cmap_resc = mplcolors.ListedColormap(cmap_big(np.linspace(0.075, 0.925, 10000)))
-cmap_resc = mpl.colormaps['viridis'].resampled(int(1e3))
+# cmap_resc = mpl.colormaps['viridis'].resampled(int(1e3))
+cmap_resc = mpl.colormaps['coolwarm'].resampled(int(1e3))
 cmap_resc.set_bad(color='black')
 color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
