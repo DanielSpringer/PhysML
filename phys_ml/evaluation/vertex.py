@@ -368,10 +368,24 @@ def mean_rmse(file_paths: list[str], vertices: dict[str, np.ndarray], save_path:
 def print_rmses(rmse_df: pd.DataFrame, run_name: str):
     errors = rmse_df['rmse']
     mean_rmse = np.mean(errors)
+    train_df = rmse_df[rmse_df['train_data']]
+    test_df = rmse_df[~rmse_df['train_data']]
+    train_rmses = train_df['rmse']
+    test_rmses = test_df['rmse']
+    train_mean = np.mean(train_rmses)
+    test_mean = np.mean(test_rmses)
     print(f'mean: {mean_rmse}, min: {min(errors)}, max: {max(errors)}')
+    if not train_df.empty:
+        print(f'training data only - mean: {train_mean}, min: {min(train_rmses)}, max: {max(train_rmses)}')
+    if not test_df.empty:
+        print(f'test data only - mean: {test_mean}, min: {min(test_rmses)}, max: {max(test_rmses)}')
     plt.figure(figsize=(8, 4))
-    plt.plot(rmse_df['tp'], errors, marker='o')
-    plt.axhline(y=mean_rmse, color='r', linestyle='--', label='mean')
+    plt.plot(rmse_df['tp'], errors, color='tab:blue', zorder=0)
+    plt.scatter(train_df['tp'], train_rmses, marker='o', color='tab:blue', label='train data')
+    plt.scatter(test_df['tp'], test_rmses, marker='o', color='tab:pink', label='test data')
+    plt.axhline(y=mean_rmse, color='tab:orange', linestyle='--', label='mean')
+    plt.axhline(y=train_mean, color='tab:blue', linestyle='--', label='train mean')
+    plt.axhline(y=test_mean, color='tab:pink', linestyle='--', label='test mean')
     plt.xlim(-0.02, 0.52)
     plt.title(f'reconstruction RMSE for {run_name}')
     plt.xlabel('tp')
