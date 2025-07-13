@@ -257,7 +257,7 @@ class AutoEncoder24x6NextTpDataset(AutoEncoderVertex24x6Dataset):
             samples_slice = slice(i * self.config.sample_count_per_vertex, (i + 1) * self.config.sample_count_per_vertex)
             sample_point_idcs = self.data_in_indices[samples_slice].type(torch.int64)
             for idcs in sample_point_idcs:
-                targets.append(self.get_vector_from_vertex(vertex, *idcs))
+                targets.append(self.get_vector_from_vertex(vertex, *idcs)[idx_range])
         targets = torch.tensor(targets, dtype=torch.float32)
 
         # drop samples for tp=0.5
