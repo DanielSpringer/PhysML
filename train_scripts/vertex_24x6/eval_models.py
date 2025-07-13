@@ -14,7 +14,6 @@ if __name__ == '__main__':
     latent_dims = [8, 16, 20, 24, 32]
     ssizes = [2000, 8000, 12000, 16000]
 
-
     # load vertices
     path_train = '/gpfs/data/fs71925/shepp123/frgs_6d'
     file_paths = AutoEncoderVertex24x6Dataset.get_filepaths(path_train, subset=None, subset_shuffle=False)[0]
@@ -38,8 +37,6 @@ if __name__ == '__main__':
 
     # general train sets
     nce_train_dataset = verteval.make_dataset(vertices, nce_train_samples, dataset_kwargs, dataset_class=AutoEncoder24x6InfoNCEDataset)
-    nce_train_dataset_subset = verteval.make_dataset(vertices, nce_train_samples, dataset_kwargs, subset=0.8, 
-                                                    dataset_class=AutoEncoder24x6InfoNCEDataset)
 
     # reconstruction filepaths
     ex_sc_fps = AutoEncoderVertex24x6Dataset.get_filepaths(path_train, subset=0.8, subset_shuffle=dataset_kwargs['subset_shuffle'], 
@@ -63,23 +60,21 @@ if __name__ == '__main__':
 
     # test sets
     test_dataset_full = verteval.make_dataset(vertices, test_samples_per_vertex, dataset_kwargs, dataset_class=AutoEncoder24x6InfoNCEDataset)
-    test_dataset_subset = verteval.make_test_from_train_dataset(vertices, path_train, dataset_kwargs, test_samples_per_vertex, 
-                                                                nce_train_dataset_subset)
 
     # run info
     base_path = '/gpfs/data/fs71925/shepp123/PhysML/saves/vertex_24x6/run_results/'
     run_info = {
-        '1_1': ([], nce_train_dataset, test_dataset_full), 
-        '1_2': ([], nce_train_dataset, test_dataset_full), 
-        '2_1_1': (ex_sc_fps, nce_train_dataset_subset, test_dataset_subset), 
-        '2_1_2': (ex_sc_fps, nce_train_dataset_subset, test_dataset_subset), 
-        '2_2_1': (ex_afm_fps, nce_train_dataset_subset, test_dataset_subset), 
-        '2_2_2': (ex_afm_fps, nce_train_dataset_subset, test_dataset_subset), 
-        '2_3_1': (ex_fm_fps, nce_train_dataset_subset, test_dataset_subset), 
-        '2_3_2': (ex_fm_fps, nce_train_dataset_subset, test_dataset_subset), 
-        '3_1': (sc_fps, nce_train_dataset_subset, test_dataset_subset), 
-        '3_2': (afm_fps, nce_train_dataset_subset, test_dataset_subset), 
-        '3_3': (fm_fps, nce_train_dataset_subset, test_dataset_subset),
+        '1_1': [],
+        '1_2': [],
+        '2_1_1': ex_sc_fps, 
+        '2_1_2': ex_sc_fps,
+        '2_2_1': ex_afm_fps,
+        '2_2_2': ex_afm_fps,
+        '2_3_1': ex_fm_fps,
+        '2_3_2': ex_fm_fps,
+        '3_1': sc_fps,
+        '3_2': afm_fps,
+        '3_3': fm_fps,
     }
 
     save_path = '/gpfs/data/fs71925/shepp123/PhysML/notebooks/vertex/'
@@ -91,9 +86,8 @@ if __name__ == '__main__':
     except:
         pass
 
-
     # evaluate models
-    def eval(run_id: str, run_name: str, ld: int, s: int):
+    def eval(run_id: str, run_name: str, ld: int, s: int, recon_files: list[str]):
         model_path = base_path + run_name
         if os.path.exists(model_path):
             # reconstruction
@@ -117,11 +111,10 @@ if __name__ == '__main__':
                 classification_df.loc[len(classification_df)] = [run_id, ld, s, pc_results[0]['f1'], pc_results[1]]
                 classification_df.to_pickle(save_path + 'classification_results.pkl')
 
-
-    for run_id, (recon_files, train_data, test_data) in run_info.items():
+    for run_id, recon_files in run_info.items():
         for ld in latent_dims:
             run_name = f'{run_id}_ld{ld}'
-            eval(run_id, run_name, ld, 24_000)
+            eval(run_id, run_name, ld, 24_000, recon_files)
         for s in ssizes:
             run_name = f'{run_id}_s{s}'
-            eval(run_id, run_name, 32, s)
+            eval(run_id, run_name, 32, s, recon_files)
