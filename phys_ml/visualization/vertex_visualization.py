@@ -173,8 +173,7 @@ def lineplot(x_list: Iterable[Iterable], y_list: Iterable[Iterable], labels: lis
     plt.show()
 
 
-def plot_compare_slices(vertices: list[np.ndarray], figsize: tuple[int, int] = (12, 8)):
-    i = 23
+def plot_compare_slices(vertices: list[np.ndarray], i: int = 18, figsize: tuple[int, int] = (12, 8)):
     axis, slice_at = 5, (i, i, i, i)
     nrows, ncols = 3, 3
     vertex_phases = ['AFM', 'SC', 'FM']
