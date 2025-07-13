@@ -415,7 +415,7 @@ def _plot_rmses(ax: Axes, rmses: pd.DataFrame, subgrouping: Literal['ld', 's'], 
             if not subset.empty:
                 data_to_plot.append(subset)
                 positions.append(pos)
-                labels.append(f"run {run_id}\n{subgrouping}={subgroup}")
+                labels.append(f"{run_id}_{subgrouping}{subgroup}")
                 color_list.append(vis.COLORS[i])
                 pos += small_gap
         pos += big_gap  # add gap after each run_id group
@@ -449,23 +449,6 @@ def plot_all_rmses(rmses: pd.DataFrame, train_data: bool = True, figsize: tuple[
 # ----------------------------------------------------------------------------------------------
 # EVALUATE PHASE CLASSIFIER
 # ----------------------------------------------------------------------------------------------
-def print_conf_mat(conf_mat: np.ndarray, name: str, labels: list[str], figsize: tuple[int, int] = (5.5, 5)):
-    font_size = 14
-    fig, ax = plt.subplots(figsize=figsize)
-    # ax = ax.imshow(conf_mat, cmap="coolwarm")
-    ax = sns.heatmap(conf_mat, annot=True, xticklabels=labels, yticklabels=labels, 
-                     vmin=0.0, vmax=1.0, fmt=".2f", ax=ax, square=True, annot_kws={"size": font_size}, cmap="coolwarm")
-    ax.tick_params(left=False, bottom=False)
-    plt.xticks(fontsize=font_size-2)
-    plt.yticks(fontsize=font_size-2)
-    # plt.title(name, fontsize=font_size + 2)
-    print(name)
-    plt.xlabel('Predicted', fontsize=font_size)
-    plt.ylabel('True', fontsize=font_size)
-    plt.savefig(f"/gpfs/data/fs71925/dspringer1/Projects/PhysML/figures/ConfMatrix_{name}.pdf", format="pdf", bbox_inches="tight")
-    plt.show()
-
-
 def _plot_classification(ax: Axes, classifications: pd.DataFrame, subgrouping: Literal['ld', 's'], figsize: tuple[int, int] = (6,4), 
                          alpha: float = 0.4, width: float = 0.5):
     sg_name = 'latent dimension' if subgrouping == 'ld' else 'sample count'

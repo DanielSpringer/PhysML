@@ -19,10 +19,11 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from phys_ml.evaluation import vertex as verteval
+# from phys_ml.evaluation import vertex as verteval
 from phys_ml.load_data.base import SimpleDataset
 from phys_ml.load_data.vertex import AutoEncoderVertex24x6Dataset, AutoEncoder24x6InfoNCEDataset
 from phys_ml.trainer.vertex import VertexTrainer24x6
+from phys_ml.visualization import vertex_visualization as vertvis
 from phys_ml.util import is_notebook
 
 
@@ -130,7 +131,7 @@ class PhaseClassification:
                 test_targets = labels[test_targets]
             conf_mat = metrics.confusion_matrix(test_targets, pred, labels=labels, normalize=normalize)
             if print_conf_mat:
-                verteval.print_conf_mat(conf_mat, model.__class__.__name__, labels)
+                vertvis.print_conf_mat(conf_mat, model.__class__.__name__, labels)
             return scores, conf_mat
         except Exception as e:
             print(e)
