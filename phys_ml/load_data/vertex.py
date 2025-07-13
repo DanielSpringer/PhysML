@@ -73,7 +73,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
             assert self.data_in_indices.shape[0] == self.data_in_slices.shape[0]
         
         # Construct target data
-        self.data_target = self.construct_targets()
+        self.data_target = self.construct_targets(vertices)
 
     @classmethod
     def load_vertex_files(cls, file_paths: list[str]) -> dict[str, np.ndarray]:
@@ -132,7 +132,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
                         if subset < 0:
                             subset = n_files + subset
                         fps = (random.sample(phase_fps, max(subset, 1)) if subset_shuffle 
-                                else phase_fps[:subset])
+                               else phase_fps[:subset])
                         file_paths.extend(fps)
                     else:
                         file_paths.extend(phase_fps)
@@ -144,7 +144,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
                     if subset < 0:
                         subset = n_files + subset
                     file_paths = (random.sample(file_paths, max(subset, 1)) if subset_shuffle 
-                                    else file_paths[:subset])
+                                  else file_paths[:subset])
         return file_paths, subset
     
     @classmethod
@@ -157,7 +157,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         merged_slices = [cls.get_vector_from_vertex(vertex, *idcs) for idcs in indices]
         return merged_slices, indices
     
-    def construct_targets(self) -> torch.Tensor:
+    def construct_targets(self, **kwargs) -> torch.Tensor:
         axis = self.config.construction_axis
         assert axis <= self.dim, f"Axis must be in range [1,{self.dim}]"
         idx_range = slice(self.length * (self.dim - axis), self.length * (self.dim - axis + 1))
@@ -239,6 +239,34 @@ class AutoEncoderVertex24x6Dataset(AutoEncoderVertexDataset):
     @classmethod
     def to_3d_vertex(cls, vertex: np.ndarray) -> np.ndarray:
         return vertex.reshape((AutoEncoderVertexDataset.length,) * cls.k_dim, order='F')
+
+
+class AutoEncoder24x6NextTpDataset(AutoEncoderVertex24x6Dataset):
+    def construct_targets(self, vertices: dict[str, np.ndarray]|None) -> torch.Tensor:
+        axis = self.config.construction_axis
+        assert axis <= self.dim, f"Axis must be in range [1,{self.dim}]"
+        idx_range = slice(self.length * (self.dim - axis), self.length * (self.dim - axis + 1))
+
+        targets = []
+        for i in range(len(self.file_paths) - 1):  # no target for tp=0.5
+            fp = self.file_paths[i + 1]
+            if vertices:
+                vertex = vertices[fp]
+            else:
+                vertex = self.load_from_file(fp)
+            samples_slice = slice(i * self.config.sample_count_per_vertex, (i + 1) * self.config.sample_count_per_vertex)
+            sample_point_idcs = self.data_in_indices[samples_slice]
+            for idcs in sample_point_idcs:
+                targets.append(self.get_vector_from_vertex(vertex, *idcs))
+        targets = torch.tensor(targets, dtype=torch.float32)
+
+        # drop samples for tp=0.5
+        self.file_paths = self.file_paths[:-1]
+        self.data_in_slices = self.data_in_slices[:-self.config.sample_count_per_vertex]
+        self.data_in_indices = self.data_in_indices[:-self.config.sample_count_per_vertex]
+
+        assert list(targets[0]) == list(self.data_in_slices[0][idx_range])
+        return targets
 
 
 class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
