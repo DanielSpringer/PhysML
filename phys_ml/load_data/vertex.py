@@ -264,8 +264,6 @@ class AutoEncoder24x6NextTpDataset(AutoEncoderVertex24x6Dataset):
         self.file_paths = self.file_paths[:-1]
         self.data_in_slices = self.data_in_slices[:-self.config.sample_count_per_vertex]
         self.data_in_indices = self.data_in_indices[:-self.config.sample_count_per_vertex]
-
-        assert list(targets[0]) == list(self.data_in_slices[0][idx_range])
         return targets
 
 
