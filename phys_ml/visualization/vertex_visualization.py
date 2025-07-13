@@ -173,7 +173,8 @@ def lineplot(x_list: Iterable[Iterable], y_list: Iterable[Iterable], labels: lis
     plt.show()
 
 
-def plot_compare_slices(vertices: list[np.ndarray], i: int = 18, figsize: tuple[int, int] = (12, 8)):
+def plot_compare_slices(vertices: list[np.ndarray], i: int = 18, figsize: tuple[int, int] = (12, 8), 
+                        colmap: str|mplcolors.Colormap|None = None):
     axis, slice_at = 5, (i, i, i, i)
     nrows, ncols = 3, 3
     vertex_phases = ['AFM', 'SC', 'FM']
@@ -186,7 +187,7 @@ def plot_compare_slices(vertices: list[np.ndarray], i: int = 18, figsize: tuple[
             ax = axs[i * ncols + (ki - 1)]
             axis = ki * 2
             data = get_mat_slice(vertex, axis, slice_at)
-            img = _create_plot(ax, data, axis, vmin=vmin, vmax=vmax)
+            img = _create_plot(ax, data, axis, colmap=colmap, vmin=vmin, vmax=vmax)
             label = f'{vertex_phases[i]} $k_{ki}$'
             ax.set_title(label)
     fig.colorbar(img, ax=axs)
