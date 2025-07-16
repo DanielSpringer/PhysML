@@ -80,7 +80,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         # use tqdm only in notebooks
         iterator = file_paths
         if is_notebook():
-            iterator = tqdm(iterator, desc='Loading vertex files')
+            iterator = tqdm(iterator, leave=False, desc='Loading vertex files')
         
         vertices = {}
         for file_path in iterator:

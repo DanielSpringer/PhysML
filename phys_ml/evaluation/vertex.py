@@ -90,40 +90,35 @@ def vertex_correlation(vertex_dir: str, paths_or_vertices: list[np.ndarray]|list
 # ----------------------------------------------------------------------------------------------
 # VERTEX ANALYSIS
 # ----------------------------------------------------------------------------------------------
-def vertex_statistics(data_dir: str, nbins: int = 60, alpha: float = 0.25, figsize: tuple[int, int] = (12, 3)) -> pd.DataFrame:
-    data = {'AFM': None, 'SC': None, 'FM': None}
-    df = pd.DataFrame(index=data.keys(), columns=['min', 'max', 'mean', 'sum'])
-    filepath_dict, _, _ = AutoEncoder24x6InfoNCEDataset.get_filepaths(data_dir, subset=None, subset_shuffle=False)
-    for phase in data.keys():
-        values = []
-        for f in filepath_dict[phase]:
-            vertex = AutoEncoderVertex24x6Dataset.load_from_file(f)
-            values.append((vertex.min(), vertex.max(), vertex.mean(), vertex.sum()))
-        values = np.array(values)
-        df.loc[phase] = [values[:, 0].min(), values[:, 1].max(), values[:, 2].mean(), values[:, 3].sum()]
-
+def plot_statistics(data, nbins: int = 60, log: bool = False, alpha: float = 0.25, figsize: tuple[int, int] = (12, 3)):
     colors = ['tab:blue', 'tab:orange', 'tab:green']
     col_iter = iter(colors)
     plt.figure(figsize=figsize)
     for phase in data.keys():
         color = next(col_iter)
-        plt.hist(data[phase], bins=nbins, density=True, label=phase, log=True, histtype='step', color=color)
-        plt.hist(data[phase], bins=nbins, density=True, log=True, alpha=alpha, color=color)
+        plt.hist(data[phase], bins=nbins, density=True, label=phase, log=log, histtype='step', color=color)
+        plt.hist(data[phase], bins=nbins, density=True, log=log, alpha=alpha, color=color)
     plt.xlim(-32, 32)
     plt.legend()
     plt.show()
 
-    col_iter = iter(colors)
-    plt.figure(figsize=figsize)
-    for phase in data.keys():
-        color = next(col_iter)
-        plt.hist(data[phase], bins=nbins, density=True, label=phase, log=True, histtype='step', color=color)
-        plt.hist(data[phase], bins=nbins, density=True, log=True, alpha=alpha, color=color)
-    plt.xlim(-32, 32)
-    plt.legend()
-    plt.show()
-    
-    return df
+
+def vertex_statistics(data_dir: str) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
+    filepath_dict = AutoEncoder24x6InfoNCEDataset.get_filepaths(data_dir, subset=None, subset_shuffle=False)[0]
+    phases = [p.upper() for p in filepath_dict.keys()]
+    data = {'AFM': None, 'SC': None, 'FM': None}
+    df = pd.DataFrame(index=phases, columns=['min', 'max', 'mean', 'sum'])
+    for phase in phases:
+        filepaths = filepath_dict[phase.lower()]
+        phase_vertices = AutoEncoderVertex24x6Dataset.load_vertex_files(filepaths)
+        data[phase] = np.ravel(list(phase_vertices.values()))
+        values = []
+        for fp in tqdm(filepaths, leave=False, desc='Analyse vertices'):
+            vertex = phase_vertices[fp]
+            values.append((vertex.min(), vertex.max(), vertex.mean(), vertex.sum()))
+        values = np.array(values)
+        df.loc[phase] = [values[:, 0].min(), values[:, 1].max(), values[:, 2].mean(), values[:, 3].sum()]
+    return df, data
 
 
 
