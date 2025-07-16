@@ -11,7 +11,7 @@ def train():
         subconfig_name='AUTO_ENCODER_VERTEX_24X6', 
         config_kwargs={
             'path_train': '/gpfs/data/fs71925/shepp123/frgs_6d', 
-            'resume': 'run_results/2_1_1_ld32', 
+            'resume': 'run_results/2_1_1_nextTp_ld32', 
             'model_wrapper': 'VertexWrapper24x6', 
             'model_name': 'AutoEncoderVertex', 
             'dataset': 'AutoEncoder24x6NextTpDataset', 
