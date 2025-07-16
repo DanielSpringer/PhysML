@@ -209,7 +209,8 @@ def plot_correlation(cor_mat: np.ndarray, title: str):
     plt.show()
 
 
-def print_conf_mat(conf_mat: np.ndarray, name: str, labels: list[str], figsize: tuple[int, int] = (5.5, 5)):
+def print_conf_mat(conf_mat: np.ndarray, name: str, labels: list[str], figsize: tuple[int, int] = (5.5, 5), 
+                   save_path: str = None):
     font_size = 14
     fig, ax = plt.subplots(figsize=figsize)
     # ax = ax.imshow(conf_mat, cmap="coolwarm")
@@ -218,9 +219,9 @@ def print_conf_mat(conf_mat: np.ndarray, name: str, labels: list[str], figsize: 
     ax.tick_params(left=False, bottom=False)
     plt.xticks(fontsize=font_size-2)
     plt.yticks(fontsize=font_size-2)
-    # plt.title(name, fontsize=font_size + 2)
     print(name)
     plt.xlabel('Predicted', fontsize=font_size)
     plt.ylabel('True', fontsize=font_size)
-    plt.savefig(f"/gpfs/data/fs71925/dspringer1/Projects/PhysML/figures/ConfMatrix_{name}.pdf", format="pdf", bbox_inches="tight")
+    if save_path:
+        plt.savefig(save_path, format="pdf", bbox_inches="tight")
     plt.show()
