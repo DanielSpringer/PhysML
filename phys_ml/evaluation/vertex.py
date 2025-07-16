@@ -90,29 +90,38 @@ def vertex_correlation(vertex_dir: str, paths_or_vertices: list[np.ndarray]|list
 # ----------------------------------------------------------------------------------------------
 # VERTEX ANALYSIS
 # ----------------------------------------------------------------------------------------------
-def vertex_statistics(data_dir: str) -> pd.DataFrame:
-    data = {'afm': None, 'sc': None, 'fm': None}
-    df = pd.DataFrame(index=['afm', 'sc', 'fm'], columns=['min', 'max', 'mean', 'sum', 'std'])
+def vertex_statistics(data_dir: str, nbins: int = 60, alpha: float = 0.25, figsize: tuple[int, int] = (12, 3)) -> pd.DataFrame:
+    data = {'AFM': None, 'SC': None, 'FM': None}
+    df = pd.DataFrame(index=data.keys(), columns=['min', 'max', 'mean', 'sum'])
     filepath_dict, _, _ = AutoEncoder24x6InfoNCEDataset.get_filepaths(data_dir, subset=None, subset_shuffle=False)
     for phase in data.keys():
-        vertices = [AutoEncoderVertex24x6Dataset.load_from_file(f) for f in filepath_dict[phase]]
-        values = np.concatenate(vertices, axis=None)
-        data[phase] = values
-        df.loc[phase] = [values.min(), values.max(), values.mean(), values.sum(), values.std()]
+        values = []
+        for f in filepath_dict[phase]:
+            vertex = AutoEncoderVertex24x6Dataset.load_from_file(f)
+            values.append((vertex.min(), vertex.max(), vertex.mean(), vertex.sum()))
+        values = np.array(values)
+        df.loc[phase] = [values[:, 0].min(), values[:, 1].max(), values[:, 2].mean(), values[:, 3].sum()]
 
+    colors = ['tab:blue', 'tab:orange', 'tab:green']
+    col_iter = iter(colors)
+    plt.figure(figsize=figsize)
     for phase in data.keys():
-        plt.figure(figsize=(12, 3))
-        plt.hist(data[phase], bins=100, density=True, rwidth=0.9, label=phase)
-        plt.xlim(-32, 32)
-        plt.legend()
-        plt.show()
+        color = next(col_iter)
+        plt.hist(data[phase], bins=nbins, density=True, label=phase, log=True, histtype='step', color=color)
+        plt.hist(data[phase], bins=nbins, density=True, log=True, alpha=alpha, color=color)
+    plt.xlim(-32, 32)
+    plt.legend()
+    plt.show()
 
+    col_iter = iter(colors)
+    plt.figure(figsize=figsize)
     for phase in data.keys():
-        plt.figure(figsize=(12, 3))
-        plt.hist(data[phase], bins=100, density=True, log=True, rwidth=0.9, label=phase)
-        plt.xlim(-32, 32)
-        plt.legend()
-        plt.show()
+        color = next(col_iter)
+        plt.hist(data[phase], bins=nbins, density=True, label=phase, log=True, histtype='step', color=color)
+        plt.hist(data[phase], bins=nbins, density=True, log=True, alpha=alpha, color=color)
+    plt.xlim(-32, 32)
+    plt.legend()
+    plt.show()
     
     return df
 
@@ -318,7 +327,7 @@ def predict_all(file_paths: list[str], vertices: dict[str, np.ndarray], save_pat
                 train_mode: TrainerModes = TrainerModes.JUPYTER) -> list[np.ndarray]:
     trainer = init_trainer(config_kwargs, dataset_kwargs=dataset_kwargs, subset_type=subset_type, device_type=device_type, 
                            load_from=save_path)
-    ckpt_path = trainer.init_trainer(train_mode=train_mode, load_from=save_path)
+    _ = trainer.init_trainer(train_mode=train_mode, load_from=save_path)
     preds = []
     iterator = file_paths
     if is_notebook():
@@ -470,7 +479,7 @@ def _plot_classification(ax: Axes, classifications: pd.DataFrame, subgrouping: L
     ax.set_title(f'Classification results for {sg_name}s and runs')
     ax.legend(title=sg_name, loc='lower right')
     ax.set_xticks(positions, labels)
-    ax.tick_params(axis='x', which='both',length=0)
+    ax.tick_params(axis='x', rotation=90, which='both', length=0)
     ax.set_ylim(int(classifications['f1'].min() * 20) / 20 - 0.06, 1.01)
 
 
