@@ -96,6 +96,8 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         random.seed(subset_seed)
         if file_paths is None:
             file_paths = [Path(fp).resolve().as_posix() for fp in glob.glob(f"{data_dir}/*.h5")]
+            if not subset_shuffle:
+                file_paths = sorted(file_paths)
         
         if subset_type and subset_type != 'phase':
             # select only vertices for certain phases
