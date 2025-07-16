@@ -1,0 +1,38 @@
+import sys, os
+sys.path.append('/gpfs/data/fs71925/shepp123/PhysML')
+
+from phys_ml.evaluation import vertex as verteval
+from phys_ml.load_data.vertex import *
+from phys_ml.trainer import TrainerModes
+
+
+if __name__ == '__main__':
+    # load vertices
+    path_train = '/gpfs/data/fs71925/shepp123/frgs_6d'
+    file_paths = AutoEncoderVertex24x6Dataset.get_filepaths(path_train, subset=None, subset_shuffle=False)[0]
+    vertices = AutoEncoderVertex24x6Dataset.load_vertex_files(file_paths)
+
+    # autoencoder
+    config_kwargs = {
+        'hidden_dims': None,
+        'epochs': 1000,
+        'test_ratio': 0.2, 
+        'devices': 1, 
+        'num_dataloader_workers': 2, 
+        'strategy': 'auto', 
+        'batch_size': 8192 * 2,
+    }
+    dataset_kwargs = {
+        'path_train': path_train, 
+        'subset_shuffle': False, 
+    }
+
+    run_id = '2_1_1_nextTp'
+    pred_config = {'subset_type': ['afm', 'fm']}
+    ld = 32
+    hidden_dim = [128, 64, 32]
+    save_path = f'/gpfs/data/fs71925/shepp123/PhysML/saves/vertex_24x6/run_results/{run_id}_ld{ld}'
+    if os.path.exists(save_path):
+        config_kwargs['hidden_dims'] = hidden_dim
+        preds = verteval.predict_all(file_paths, vertices, save_path, config_kwargs, dataset_kwargs, 
+                                    encode_only=False, train_mode=TrainerModes.SLURM, **pred_config)
