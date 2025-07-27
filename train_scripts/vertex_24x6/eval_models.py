@@ -78,13 +78,15 @@ if __name__ == '__main__':
     }
 
     save_path = '/gpfs/data/fs71925/shepp123/PhysML/notebooks/vertex/'
-    rmse_df = pd.DataFrame(columns=['run_id', 'ld', 's', 'tp', 'rmse', 'train_data'])
-    classification_df = pd.DataFrame(columns=['run_id', 'ld', 's', 'f1', 'conf_mat'])
     try:
         rmse_df = pd.read_csv(save_path + 'reconstruction_results.csv')
         classification_df = pd.read_pickle(save_path + 'classification_results.pkl')
     except:
-        pass
+        rmse_df = pd.DataFrame(columns=['run_id', 'ld', 's', 'tp', 'rmse', 'train_data'])
+    try:
+        classification_df = pd.read_pickle(save_path + 'classification_results.pkl')
+    except:
+        classification_df = pd.DataFrame(columns=['run_id', 'ld', 's', 'f1', 'conf_mat'])
 
     # evaluate models
     def eval(run_id: str, run_name: str, ld: int, s: int, recon_files: list[str]):

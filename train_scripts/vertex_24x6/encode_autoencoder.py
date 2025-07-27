@@ -36,9 +36,10 @@ if __name__ == '__main__':
         'subset_shuffle': False, 
     }
     pred_configs = {
-        # '1_1': {},
-        # '1_2': {},
-        '2_1_1': {'subset_type': ['afm', 'fm']},
+        '1_1': {},
+        '1_2': {},
+        # '2_1_1': {'subset_type': ['afm', 'fm']},
+        # '2_1_1_nextTp': {'subset_type': ['afm', 'fm']},
         # '2_1_2': {'subset_type': ['afm', 'fm']},
         # '2_2_1': {'subset_type': ['sc', 'fm']},
         # '2_2_2': {'subset_type': ['sc', 'fm']},

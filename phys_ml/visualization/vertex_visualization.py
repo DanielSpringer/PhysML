@@ -173,9 +173,9 @@ def lineplot(x_list: Iterable[Iterable], y_list: Iterable[Iterable], labels: lis
     plt.show()
 
 
-def plot_compare_slices(vertices: list[np.ndarray], i: int = 18, figsize: tuple[int, int] = (12, 8), 
+def plot_compare_slices(vertices: list[np.ndarray], i: int|tuple[int, int, int, int] = 18, axis: int = 5, figsize: tuple[int, int] = (12, 8), 
                         colmap: str|mplcolors.Colormap|None = None, vmin: float|None = None, vmax: float|None = None):
-    axis, slice_at = 5, (i, i, i, i)
+    slice_at = i if isinstance(i, tuple) else (i, i, i, i)
     nrows, ncols = 3, 3
     vertex_phases = ['AFM', 'SC', 'FM']
     data_dict = {}
@@ -203,10 +203,10 @@ def plot_compare_slices(vertices: list[np.ndarray], i: int = 18, figsize: tuple[
     plt.show()
 
 
-def plot_correlation(cor_mat: np.ndarray, title: str):
+def plot_correlation(cor_mat: np.ndarray, title: str, vmin: float = 0.5, vmax: float = 1.0):
     # Create the heatmap
     plt.figure(figsize=(6, 5))
-    plt.imshow(cor_mat, extent=[0, 0.5, 0, 0.5], cmap='coolwarm', interpolation='nearest', origin="lower")
+    plt.imshow(cor_mat, extent=[0, 0.5, 0, 0.5], cmap='coolwarm', interpolation='nearest', origin="lower", vmin=vmin, vmax=vmax)
     plt.colorbar(label='Correlation Coefficient')
 
     # Add labels
