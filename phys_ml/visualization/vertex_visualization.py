@@ -203,10 +203,10 @@ def plot_compare_slices(vertices: list[np.ndarray], i: int|tuple[int, int, int, 
     plt.show()
 
 
-def plot_correlation(cor_mat: np.ndarray, title: str):
+def plot_correlation(cor_mat: np.ndarray, title: str, vmin: float = 0.5, vmax: float = 1.0):
     # Create the heatmap
     plt.figure(figsize=(6, 5))
-    plt.imshow(cor_mat, extent=[0, 0.5, 0, 0.5], cmap='coolwarm', interpolation='nearest', origin="lower")
+    plt.imshow(cor_mat, extent=[0, 0.5, 0, 0.5], cmap='coolwarm', interpolation='nearest', origin="lower", vmin=vmin, vmax=vmax)
     plt.colorbar(label='Correlation Coefficient')
 
     # Add labels

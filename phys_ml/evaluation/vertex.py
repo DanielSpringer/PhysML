@@ -79,7 +79,7 @@ def vertex_correlation(vertex_dir: str, paths_or_vertices: list[np.ndarray]|list
         loop.run_until_complete(looper)
 
     # save result
-    fname = 'cor_mat_vertex24x6'
+    fname = 'cor_mat'
     if save_suffix:
         fname += f'_{save_suffix}'
     np.save(f'{fname}.npy', cor_mat)
@@ -334,11 +334,9 @@ def predict_all(file_paths: list[str], vertices: dict[str, np.ndarray], save_pat
     return preds
 
 
-def mean_rmse(file_paths: list[str], vertices: dict[str, np.ndarray], save_path: str, plot: bool = False) -> dict[float, float]:
-    true_fps = file_paths
-    true_dir = Path(file_paths[0]).parent.as_posix()
+def mean_rmse(vertices: dict[str, np.ndarray], save_path: str, plot: bool = False) -> dict[float, float]:
+    true_fps = sorted(vertices.keys())
     pred_dir = f'{save_path}/predictions'
-    filenames = [Path(fp).stem for fp in sorted(true_fps)]
 
     if plot:
         i = 18
@@ -350,12 +348,13 @@ def mean_rmse(file_paths: list[str], vertices: dict[str, np.ndarray], save_path:
                                 in zip([(k, c) for k in other_ks for c in ['x', 'y']], slice_at)])
 
     rmses: dict[float, float] = {}
-    iterator = filenames
+    iterator = true_fps
     if is_notebook():
         iterator = tqdm(iterator, desc='Computing RMSE', leave=False)
-    for fn in iterator:
+    for fp in iterator:
+        fn = Path(fp).stem
         tp = float(fn[2:6])
-        true = vertices[f'{true_dir}/{fn}.h5']
+        true = vertices[fp]
         pred = np.load(f'{pred_dir}/{fn}.npy')
 
         if plot:
