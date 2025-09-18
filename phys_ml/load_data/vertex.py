@@ -88,16 +88,30 @@ class AutoEncoderVertexDataset(FilebasedDataset):
             vertices[file_path] = vertex
         return vertices
     
+    @staticmethod
+    def _subset_files(file_paths: list[str], subset: int|float) -> tuple[list[str], int]:
+        n_files = len(file_paths)
+        if type(subset) == float:
+            subset = int(round(n_files * subset, 0))
+        if subset < n_files:
+            if subset < 0:
+                subset = n_files + subset
+            fps = file_paths[:subset]
+            return fps, subset
+        else:
+            return file_paths, subset
+    
     @classmethod
-    def get_filepaths(cls, data_dir: str, subset: int|float|None, subset_shuffle: bool = True, subset_seed: int = 12,
+    def get_filepaths(cls, data_dir: str, subset: int|float|None, subset_shuffle: bool = True, subset_seed: int = 123,
                       subset_type: Literal['phase', 'sc', 'afm', 'fm']|None|list[str] = None, 
                       file_paths: list[str]|None = None) -> tuple[list[str], int]:
         # Subsample files
         random.seed(subset_seed)
         if file_paths is None:
             file_paths = [Path(fp).resolve().as_posix() for fp in glob.glob(f"{data_dir}/*.h5")]
-            if not subset_shuffle:
-                file_paths = sorted(file_paths)
+        file_paths = sorted(file_paths)
+        if subset_shuffle:
+            random.shuffle(file_paths)
         
         if subset_type and subset_type != 'phase':
             # select only vertices for certain phases
@@ -127,26 +141,11 @@ class AutoEncoderVertexDataset(FilebasedDataset):
                 
                 file_paths = []
                 for phase_fps in fps_by_phase:
-                    n_files = len(phase_fps)
-                    if type(subset) == float:
-                        subset = int(round(n_files * subset, 0))
-                    if subset < n_files:
-                        if subset < 0:
-                            subset = n_files + subset
-                        fps = (random.sample(phase_fps, max(subset, 1)) if subset_shuffle 
-                               else phase_fps[:subset])
-                        file_paths.extend(fps)
-                    else:
-                        file_paths.extend(phase_fps)
+                    fps, subset = cls._subset_files(phase_fps, subset)
+                    file_paths.extend(fps)
             else:
-                n_files = len(file_paths)
-                if type(subset) == float:
-                    subset = int(round(n_files * subset, 0))
-                if subset < n_files:
-                    if subset < 0:
-                        subset = n_files + subset
-                    file_paths = (random.sample(file_paths, max(subset, 1)) if subset_shuffle 
-                                  else file_paths[:subset])
+                fps, subset = cls._subset_files(file_paths, subset)
+                file_paths = fps
         return file_paths, subset
     
     @classmethod
@@ -159,7 +158,7 @@ class AutoEncoderVertexDataset(FilebasedDataset):
         merged_slices = [cls.get_vector_from_vertex(vertex, *idcs) for idcs in indices]
         return merged_slices, indices
     
-    def construct_targets(self, **kwargs) -> torch.Tensor:
+    def construct_targets(self, *args) -> torch.Tensor:
         axis = self.config.construction_axis
         assert axis <= self.dim, f"Axis must be in range [1,{self.dim}]"
         idx_range = slice(self.length * (self.dim - axis), self.length * (self.dim - axis + 1))
@@ -317,7 +316,6 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
                 other_ids = [(i + j) % len(vertices) for j in range(1, self.n_phases)]
                 other_vertices = [vertices[idx] for idx in other_ids]
                 assert i not in other_ids, "Negative matches for vertex contain the vertex itself."
-                # self.file_paths.extend(([phases_fps[i]] * 2 + [phases_fps[j] for j in other_ids]) * config.sample_count_per_vertex)
                 
                 input_samples, input_idcs = self.sample(vertex, config.sample_count_per_vertex)
                 pos_idcs = input_idcs.copy()
@@ -353,7 +351,7 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
         self.targets = self.construct_targets(self.input_vectors)
     
     @classmethod
-    def get_filepaths(cls, data_dir: str, subset: int|float|None, subset_shuffle: bool = True, subset_seed: int = 12,
+    def get_filepaths(cls, data_dir: str, subset: int|float|None, subset_shuffle: bool = True, subset_seed: int = 123,
                       subset_type: Literal['afm', 'sc', 'fm']|list[str]|None = None, 
                       file_paths: list[str]|None = None) -> tuple[dict[str, list[str]], int]:
         # Subsample files
@@ -364,6 +362,9 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
             subset_type = ['afm', 'sc', 'fm']
         elif isinstance(subset_type, str):
             subset_type = [subset_type]
+        file_paths = sorted(file_paths)
+        if subset_shuffle:
+            random.shuffle(file_paths)
         
         fps_by_phase = {phase: [] for phase in subset_type}
         for fp in file_paths:
@@ -384,8 +385,7 @@ class AutoEncoder24x6InfoNCEDataset(AutoEncoderVertex24x6Dataset):
                 if phase_subset < n_files:
                     if phase_subset < 0:
                         phase_subset = n_files + phase_subset
-                    fps = (random.sample(fps, max(phase_subset, 1)) if subset_shuffle 
-                            else fps[:phase_subset])
+                    fps = fps[:phase_subset]
                     fps_by_phase[phase] = fps
         
         # extend lists of file_paths to same length for each phase by random sampling 

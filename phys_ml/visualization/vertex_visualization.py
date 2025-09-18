@@ -4,6 +4,7 @@ from typing import Iterable
 import matplotlib as mpl
 import matplotlib.axes as axes
 import matplotlib.colors as mplcolors
+import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 
 import numpy as np
@@ -21,15 +22,16 @@ color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 
 def _plot(data: np.ndarray, ax: axes.Axes, x_label: str, y_label: str, colmap: str|mplcolors.Colormap, 
-          vmin: float|None = None, vmax: float|None = None, title: str|None = None):
+          vmin: float|None = None, vmax: float|None = None, title: str|None = None, font_size: int = 14):
     cmap = colmap if colmap else cmap_resc
     img = ax.imshow(data, cmap=cmap)
     if vmin is not None and vmax is not None:
         img.set_clim(vmin=vmin, vmax=vmax)
-    ax.set_xticks([]) 
+    ax.set_xticks([])
     ax.set_yticks([])
-    ax.set_xlabel(x_label, fontsize=14)
-    ax.set_ylabel(y_label, fontsize=14)
+    ax.tick_params(labelsize=font_size - 2)
+    ax.set_xlabel(x_label, fontsize=font_size)
+    ax.set_ylabel(y_label, fontsize=font_size)
     ax.set_title(title)
     return img
 
@@ -63,7 +65,7 @@ def get_mat_slice(mat: np.ndarray, axis: int|tuple[int,int], slice_at: int|tuple
 
 
 def _create_plot(ax: axes.Axes, data: np.ndarray, axis: int, colmap: str|mplcolors.Colormap|None = None, 
-                 vmin: float|None = None, vmax: float|None = None, title: str|None = None):
+                 vmin: float|None = None, vmax: float|None = None, title: str|None = None, font_size: int = 14):
     k_dim, n_freq = AutoEncoderVertexDataset.k_dim, AutoEncoderVertexDataset.n_freq
     space_dim, length = AutoEncoderVertexDataset.space_dim, AutoEncoderVertexDataset.length
     dim = len(data.shape)
@@ -83,7 +85,7 @@ def _create_plot(ax: axes.Axes, data: np.ndarray, axis: int, colmap: str|mplcolo
         x_label, y_label = f'$k_{{{k}_x}}$', f'$k_{{{k}_y}}$'
     else:
         x_label, y_label = '', ''
-    img = _plot(data, ax, x_label, y_label, colmap, vmin, vmax, title)
+    img = _plot(data, ax, x_label, y_label, colmap, vmin, vmax, title, font_size=font_size)
     return img
 
 
@@ -173,8 +175,8 @@ def lineplot(x_list: Iterable[Iterable], y_list: Iterable[Iterable], labels: lis
     plt.show()
 
 
-def plot_compare_slices(vertices: list[np.ndarray], i: int|tuple[int, int, int, int] = 18, axis: int = 5, figsize: tuple[int, int] = (12, 8), 
-                        colmap: str|mplcolors.Colormap|None = None, vmin: float|None = None, vmax: float|None = None):
+def plot_compare_slices(vertices: list[np.ndarray], i: int|tuple[int, int, int, int] = 18, axis: int = 5, figsize: tuple[int, int] = (12, 10), 
+                        colmap: str|mplcolors.Colormap|None = None, vmin: float|None = None, vmax: float|None = None, font_size: int = 14):
     slice_at = i if isinstance(i, tuple) else (i, i, i, i)
     nrows, ncols = 3, 3
     vertex_phases = ['AFM', 'SC', 'FM']
@@ -188,18 +190,38 @@ def plot_compare_slices(vertices: list[np.ndarray], i: int|tuple[int, int, int, 
     if vmax is None:
         vmax = max([np.nanmax(d) for d in data_dict.values()])
     
-    fig, axs = plt.subplots(nrows, ncols, figsize=figsize, layout='compressed', subplot_kw={'aspect': 'equal'})
+    fig, axs = plt.subplots(nrows, ncols, figsize=figsize, subplot_kw={'aspect': 'equal'}, gridspec_kw={'hspace': 0.4})
     axs = axs.flatten()
+    ks = range(1,4)
     for i, vertex in enumerate(vertices):
-        for ki in range(1, 4):
+        for ki in ks:
             data = data_dict[(i, ki)]
             ax = axs[i * ncols + (ki - 1)]
             axis = ki * 2
-            img = _create_plot(ax, data, axis, colmap=colmap, vmin=vmin, vmax=vmax)
-            label = f'{vertex_phases[i]} $k_{ki}$'
-            ax.set_title(label)
-    fig.colorbar(img, ax=axs)
-    fig.suptitle(f'Visualization of vertices sliced at coordinates {slice_at}')
+            img = _create_plot(ax, data, axis, colmap=colmap, vmin=vmin, vmax=vmax, font_size=font_size)
+            label = f'${", ".join([f"k_{xj} = ({slice_at[j * 2]}, {slice_at[j * 2 + 1]})" for j, xj in 
+                                   enumerate([xi for xi in ks if xi != ki])])}$'
+            ax.set_title(label, fontsize=font_size - 2)
+    cbar = fig.colorbar(img, ax=axs)
+    cbar.ax.tick_params(labelsize=font_size-2)
+    # fig.suptitle(f'Visualization of vertices sliced at coordinates {slice_at}', fontsize=font_size)
+
+    for row, label in enumerate(['AFM', 'SC', 'FM']):
+        # Add border around each row
+        row_axes = axs[row * ncols:(row + 1) * ncols]
+        bboxes = [ax.get_position(fig) for ax in row_axes]
+        x0 = min([bbox.x0 for bbox in bboxes]) - 0.045
+        y0 = min([bbox.y0 for bbox in bboxes]) - 0.035
+        x1 = max([bbox.x1 for bbox in bboxes]) + 0.015
+        y1 = max([bbox.y1 for bbox in bboxes]) + 0.03
+        rect = patches.Rectangle((x0, y0), x1 - x0, y1 - y0, linewidth=2, edgecolor=None, 
+                                 facecolor='#f0f0f0', transform=fig.transFigure, zorder=-1)
+        fig.patches.append(rect)
+
+        # Add label to each row
+        y_center = np.mean([bbox.y0 + bbox.height / 2 for bbox in bboxes])
+        x_left = min([bbox.x0 for bbox in bboxes]) - 0.02
+        fig.text(x_left, y_center, label, va='center', ha='right', rotation=90, fontsize=font_size)
     plt.show()
 
 
@@ -217,13 +239,14 @@ def plot_correlation(cor_mat: np.ndarray, title: str, vmin: float = 0.5, vmax: f
     plt.show()
 
 
-def print_conf_mat(conf_mat: np.ndarray, name: str, labels: list[str], figsize: tuple[int, int] = (5.5, 5), 
+def print_conf_mat(conf_mat: np.ndarray, name: str, labels: list[str], figsize: tuple[int, int] = (5.5, 5), font_size: int = 14,
                    save_path: str = None):
-    font_size = 14
     fig, ax = plt.subplots(figsize=figsize)
     # ax = ax.imshow(conf_mat, cmap="coolwarm")
     ax = sns.heatmap(conf_mat, annot=True, xticklabels=labels, yticklabels=labels, 
                      vmin=0.0, vmax=1.0, fmt=".2f", ax=ax, square=True, annot_kws={"size": font_size}, cmap="coolwarm")
+    cbar = ax.collections[0].colorbar
+    cbar.ax.tick_params(labelsize=font_size-2)
     ax.tick_params(left=False, bottom=False)
     plt.xticks(fontsize=font_size-2)
     plt.yticks(fontsize=font_size-2)

@@ -69,8 +69,8 @@ class Config(Generic[R, S, T]):
         'mode': 'min',          # 'min' for minimizing the validation loss
         'verbose': True,
         'save_last': False,
-    })                                                                              # keyword arguments for the model checkpoint class
-    _callbacks: list[str] = field(default_factory=lambda: ['EarlyStopping'])        # list of callback class names
+    })                                                                # keyword arguments for the model checkpoint class
+    _callbacks: list[str] = field(default_factory=lambda: [])         # list of callback class names
     callbacks_kwargs: dict[str, dict[str, Any]] = field(default_factory=lambda: {
         'EarlyStopping': {
             'monitor': 'val_loss',  # Monitor validation loss

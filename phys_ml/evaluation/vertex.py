@@ -9,12 +9,12 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import numpy as np
 import pandas as pd
-import seaborn as sns
 
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
+from scipy.ndimage import gaussian_filter1d
 from tqdm.notebook import tqdm
 
 from .. import metrics
@@ -216,6 +216,53 @@ def eval_train(trainer: VertexTrainer, info_dict: list[dict[str, Any]], info_fil
 
 
 # ----------------------------------------------------------------------------------------------
+# CONVERGENCE
+# ----------------------------------------------------------------------------------------------
+def _create_loss_plot(ax: Axes, tensorboard_data: pd.DataFrame, labels: list[str], y_max: float = 0.2, 
+                      smooth: int = 4, alpha: float = 0.3, log: bool = False):
+    grouped_df = tensorboard_data.groupby(['run', 'ld', 's'])
+    cmap = vis.get_cmap(grouped_df.ngroups, 'hsv')
+    for i, ((run_id, ld, s), group) in enumerate(grouped_df):
+        ax.plot(group['epoch'], gaussian_filter1d(group['value'], smooth), label=labels[i], color=cmap(i))
+        ax.plot(group['epoch'], group['value'], color=cmap(i), alpha=alpha)
+    ax.set_xlabel('epoch')
+    ax.set_ylabel('loss')
+    if log:
+        ax.set_yscale('log')
+    else:
+        ax.set_ylim((.0, y_max))
+    ax.legend(loc='upper right')
+
+
+def plot_loss_progress(tensorboard_data: pd.DataFrame, y_maxs: tuple[float, float, float, float], 
+                       figsize: tuple[int, int] = (8, 4), smooth: int = 4, alpha: float = 0.3, log: bool = False):
+    data = tensorboard_data.sort_values(by=['run', 'ld', 's'])
+
+    fig, axs = plt.subplots(1, 2, figsize=figsize)
+    subset = data[(data['ld'] == 32) & (data['s'] == 24000)]
+    plot_data = subset[subset['run'].str.match(r'(1_1)|(2_._1$)|(3_.*)')]
+    _create_loss_plot(axs[0], plot_data, labels=sorted(plot_data['run'].unique()), 
+                      y_max=y_maxs[0], smooth=smooth, alpha=alpha, log=log)
+    plot_data = subset[subset['run'].str.match(r'(1_2)|(2_._2$)')]
+    _create_loss_plot(axs[1], plot_data, labels=sorted(plot_data['run'].unique()),
+                      y_max=y_maxs[1], smooth=smooth, alpha=alpha, log=log)
+    plt.tight_layout()
+    plt.show()
+
+    fig, axs = plt.subplots(1, 2, figsize=figsize)
+    subset = data[data['run'] == '2_1_1']
+    plot_data = subset[subset['s'] == 24000]
+    _create_loss_plot(axs[0], plot_data, labels=sorted(plot_data['ld'].unique()),
+                      y_max=y_maxs[2], smooth=smooth, alpha=alpha, log=log)
+    plot_data = subset[subset['ld'] == 32]
+    _create_loss_plot(axs[1], plot_data, labels=sorted(plot_data['s'].unique()),
+                      y_max=y_maxs[3], smooth=smooth, alpha=alpha, log=log)
+    plt.tight_layout()
+    plt.show()
+
+
+
+# ----------------------------------------------------------------------------------------------
 # EVALUATE AUTOENCODER
 # ----------------------------------------------------------------------------------------------
 def evaluate_prediction(save_path: str, test_filename: str, trainer: VertexTrainer, target: np.ndarray, 
@@ -368,7 +415,7 @@ def mean_rmse(vertices: dict[str, np.ndarray], save_path: str, plot: bool = Fals
     return rmses
 
 
-def print_rmses(rmse_df: pd.DataFrame, run_name: str):
+def plot_rmse_against_tp(rmse_df: pd.DataFrame, run_name: str, figsize: tuple[int, int] = (8,4), font_size: int = 14):
     errors = rmse_df['rmse']
     mean_rmse = np.mean(errors)
     train_df = rmse_df[rmse_df['train_data']]
@@ -382,7 +429,7 @@ def print_rmses(rmse_df: pd.DataFrame, run_name: str):
         print(f'training data only - mean: {train_mean}, min: {min(train_rmses)}, max: {max(train_rmses)}')
     if not test_df.empty:
         print(f'test data only - mean: {test_mean}, min: {min(test_rmses)}, max: {max(test_rmses)}')
-    plt.figure(figsize=(8, 4))
+    plt.figure(figsize=figsize)
     plt.plot(rmse_df['tp'], errors, color='tab:blue', zorder=0)
     plt.scatter(train_df['tp'], train_rmses, marker='o', color='tab:blue', label='train data')
     plt.scatter(test_df['tp'], test_rmses, marker='o', color='tab:pink', label='test data')
@@ -390,103 +437,146 @@ def print_rmses(rmse_df: pd.DataFrame, run_name: str):
     plt.axhline(y=train_mean, color='tab:blue', linestyle='--', label='train mean')
     plt.axhline(y=test_mean, color='tab:pink', linestyle='--', label='test mean')
     plt.xlim(-0.02, 0.52)
-    plt.title(f'reconstruction RMSE for {run_name}')
-    plt.xlabel('tp')
-    plt.ylabel('RMSE')
-    plt.legend()
+    plt.xticks(fontsize=font_size-2)
+    plt.yticks(fontsize=font_size-2)
+    plt.title(f'reconstruction RMSE for {run_name}', fontsize=font_size)
+    plt.xlabel('tp', fontsize=font_size)
+    plt.ylabel('RMSE', fontsize=font_size)
+    plt.legend(fontsize=font_size-2)
     plt.grid()
     plt.show()
 
 
-def _plot_rmses(ax: Axes, rmses: pd.DataFrame, subgrouping: Literal['ld', 's'], alpha: float = 0.4, width: float = 0.5):
+def _create_rmse_boxplot(ax: Axes, rmses: pd.DataFrame, xlabel: str, xtick_labels: list[str], alpha: float = 0.4, width: float = 0.5):
     # Sort run_ids and lds for consistent plotting
-    run_ids = sorted(rmses['run_id'].unique())
-    subgroups = sorted(rmses[subgrouping].unique())
-    sg_name = 'latent dimension' if subgrouping == 'ld' else 'sample count'
+    # big_gap = 2 * width  # gap between run_id groups
+    # pos = 0
+    # small_gap = width * 1.5  # gap within group of boxplots
+    # for run_id in run_ids:
+    #     for i, subgroup in enumerate(subgroups):
+    #         subset = rmses[(rmses['run_id'] == run_id) & (rmses[subgrouping] == subgroup)]['rmse']
+    #         if not subset.empty:
+    #             data_to_plot.append(subset)
+    #             positions.append(pos)
+    #             labels.append(f"{run_id}_{subgrouping}{subgroup}")
+    #             color_list.append(vis.COLORS[i])
+    #             pos += small_gap
+    #     pos += big_gap  # add gap after each run_id group
+    # box = ax.boxplot(data_to_plot, positions=positions, widths=width, patch_artist=True)
+    # for path_patch, color in zip(box['boxes'], color_list):
+    #     path_patch.set_facecolor(color)
+    #     path_patch.set_alpha(alpha)
 
     positions = []
-    labels = []
     data_to_plot = []
-    color_list = []
-
-    big_gap = 2 * width  # gap between run_id groups
     pos = 0
-    small_gap = width * 1.5  # gap within group of boxplots
-    for run_id in run_ids:
-        for i, subgroup in enumerate(subgroups):
-            subset = rmses[(rmses['run_id'] == run_id) & (rmses[subgrouping] == subgroup)]['rmse']
-            if not subset.empty:
-                data_to_plot.append(subset)
-                positions.append(pos)
-                labels.append(f"{run_id}_{subgrouping}{subgroup}")
-                color_list.append(vis.COLORS[i])
-                pos += small_gap
-        pos += big_gap  # add gap after each run_id group
+    gap = width * 1.5
+    for (run_id, ld, s), group in rmses.groupby(['run_id', 'ld', 's']):
+        data_to_plot.append(group['rmse'])
+        positions.append(pos)
+        pos += gap
     box = ax.boxplot(data_to_plot, positions=positions, widths=width, patch_artist=True)
-    for path_patch, color in zip(box['boxes'], color_list):
-        path_patch.set_facecolor(color)
+    for path_patch in box['boxes']:
+        path_patch.set_facecolor(vis.COLORS[0])
         path_patch.set_alpha(alpha)
-    ax.set_title(f'RMSE for {sg_name}s and runs')
-    ax.set_xlabel(f'run ID & {sg_name}')
+
+    ax.set_xlabel(xlabel)
     ax.set_ylabel('RMSE')
-    ax.set_xticks(positions, labels, rotation=90)
+    ax.set_xticks(positions, xtick_labels, rotation=90)
 
 
-def plot_all_rmses(rmses: pd.DataFrame, train_data: bool = True, figsize: tuple[int, int] = (6,4), 
-                   alpha: float = 0.4, width: float = 0.5):
-    fig, axs = plt.subplots(1, 2, figsize=figsize)
+def plot_rmse_boxplots(rmses: pd.DataFrame, train_data: bool = True, figsize: tuple[int, int] = (6,4), 
+                       alpha: float = 0.4, width: float = 0.5):
     rmses = rmses.sort_values(by=['run_id', 'ld', 's'])
-    rmses_ld = rmses[rmses['s'] == 24000]
-    rmses_s = rmses[rmses['ld'] == 32]
     if not train_data:
-        rmses_ld = rmses_ld[rmses_ld['train_data'] == False]
-        rmses_s = rmses_s[rmses_s['train_data'] == False]
-    _plot_rmses(axs[0], rmses_ld, 'ld', alpha, width)
-    _plot_rmses(axs[1], rmses_s, 's', alpha, width)
+        rmses = rmses[rmses['run_id'].str.startswith('1_') | (rmses['train_data'] == False)]
+
+    fig, axs = plt.subplots(1, 2, figsize=figsize)
+    subset = rmses[(rmses['ld'] == 32) & (rmses['s'] == 24000)]
+    plot_data = subset[subset['run_id'].str.match(r'(1_1)|(2_._1$)|(3_.*)')]
+    _create_rmse_boxplot(axs[0], plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width)
+    plot_data = subset[subset['run_id'].str.match(r'(1_2)|(2_._2$)')]
+    _create_rmse_boxplot(axs[1], plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width)
     plt.tight_layout()
     plt.show()
-    return rmses.drop(columns=['tp', 'train_data']).groupby(['run_id', 'ld', 's']).mean()
+
+    fig, axs = plt.subplots(1, 2, figsize=figsize)
+    subset = rmses[rmses['run_id'] == '2_1_1']
+    plot_data = subset[subset['s'] == 24000]
+    _create_rmse_boxplot(axs[0], plot_data, 'latent space dimension', sorted(plot_data['ld'].unique()), alpha, width)
+    plot_data = subset[subset['ld'] == 32]
+    _create_rmse_boxplot(axs[1], plot_data, 'subsamples per vertex', sorted(plot_data['s'].unique()), alpha, width)
+    plt.tight_layout()
+    plt.show()
 
 
 
 # ----------------------------------------------------------------------------------------------
 # EVALUATE PHASE CLASSIFIER
 # ----------------------------------------------------------------------------------------------
-def _plot_classification(ax: Axes, classifications: pd.DataFrame, subgrouping: Literal['ld', 's'], figsize: tuple[int, int] = (6,4), 
+def _plot_classification(ax: Axes, classifications: pd.DataFrame, xlabel: str, xtick_labels: list[str], 
                          alpha: float = 0.4, width: float = 0.5):
-    sg_name = 'latent dimension' if subgrouping == 'ld' else 'sample count'
-    pos = 0
+    classifications = classifications.set_index(['run_id', 'ld', 's'])
     positions = []
-    labels = []
-    for i, (run_id, group) in enumerate(classifications.groupby('run_id')):
-        subpos = []
-        for j, (_, row) in enumerate(group.iterrows()):
-            label = f"{subgrouping}={row[subgrouping]}" if i == 0 else None
-            ax.bar(pos, row['f1'], width=width, label=label, color=vis.COLORS[j], alpha=alpha)
-            subpos.append(pos)
-            pos += width
-        positions.append(np.mean(subpos))
-        labels.append(f"run {run_id}")
-        pos += width / 4
-    ax.set_xlabel('run ID')
+    pos = 0
+    gap = width * 1.5
+    col = vis.COLORS[0]
+    for (run_id, ld, s), row in classifications.iterrows():
+        ax.bar(pos, row['f1'], width=width, color=col, alpha=alpha)
+        positions.append(pos)
+        pos += gap
+    
+    ax.set_xlabel(xlabel)
     ax.set_ylabel('f1 score')
-    ax.set_title(f'Classification results for {sg_name}s and runs')
-    ax.legend(title=sg_name, loc='lower right')
-    ax.set_xticks(positions, labels)
+    ax.set_xticks(positions, xtick_labels)
     ax.tick_params(axis='x', rotation=90, which='both', length=0)
     ax.set_ylim(int(classifications['f1'].min() * 20) / 20 - 0.06, 1.01)
+
+    # sg_name = 'latent dimension' if subgrouping == 'ld' else 'sample count'
+    # pos = 0
+    # positions = []
+    # labels = []
+    # for i, (run_id, group) in enumerate(classifications.groupby('run_id')):
+    #     subpos = []
+    #     for j, (_, row) in enumerate(group.iterrows()):
+    #         label = f"{subgrouping}={row[subgrouping]}" if i == 0 else None
+    #         ax.bar(pos, row['f1'], width=width, label=label, color=vis.COLORS[j], alpha=alpha)
+    #         subpos.append(pos)
+    #         pos += width
+    #     positions.append(np.mean(subpos))
+    #     labels.append(f"run {run_id}")
+    #     pos += width / 4
+    # ax.set_xlabel('run ID')
+    # ax.set_ylabel('f1 score')
+    # ax.set_title(f'Classification results for {sg_name}s and runs')
+    # ax.legend(title=sg_name, loc='lower right')
+    # ax.set_xticks(positions, labels)
+    # ax.tick_params(axis='x', rotation=90, which='both', length=0)
+    # ax.set_ylim(int(classifications['f1'].min() * 20) / 20 - 0.06, 1.01)
 
 
 def plot_classification_results(classifications: pd.DataFrame, figsize: tuple[int, int] = (6,4), alpha: float = 0.4, 
                                 width: float = 0.5):
+    classifications = classifications.sort_values(by=['run_id', 'ld', 's']).drop(columns='conf_mat')
+
     fig, axs = plt.subplots(1, 2, figsize=figsize)
-    classifications = classifications.sort_values(by=['run_id', 'ld', 's'])
-    classifications_ld = classifications.drop(columns='conf_mat')[classifications['s'] == 24000]
-    classifications_s = classifications.drop(columns='conf_mat')[classifications['ld'] == 32]
-    _plot_classification(axs[0], classifications_ld, 'ld', alpha, width)
-    _plot_classification(axs[1], classifications_s, 's', alpha, width)
+    subset = classifications[(classifications['ld'] == 32) & (classifications['s'] == 24000)]
+    plot_data = subset[subset['run_id'].str.match(r'(1_1)|(2_._1$)|(3_.*)')]
+    _plot_classification(axs[0], plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width)
+    plot_data = subset[subset['run_id'].str.match(r'(1_2)|(2_._2$)')]
+    _plot_classification(axs[1], plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width)
+    plt.tight_layout()
     plt.show()
-    return classifications.drop(columns='conf_mat').set_index(['run_id', 'ld', 's'])
+
+    fig, axs = plt.subplots(1, 2, figsize=figsize)
+    subset = classifications[classifications['run_id'] == '2_1_1']
+    plot_data = subset[subset['s'] == 24000]
+    _plot_classification(axs[0], plot_data, 'latent space dimension', sorted(plot_data['ld'].unique()), alpha, width)
+    plot_data = subset[subset['ld'] == 32]
+    _plot_classification(axs[1], plot_data, 'subsamples per vertex', sorted(plot_data['s'].unique()), alpha, width)
+    plt.tight_layout()
+    plt.show()
+
 
 
 # ----------------------------------------------------------------------------------------------
@@ -496,22 +586,20 @@ from sklearn import ensemble
 from phys_ml.analysis.vertex import PhaseClassification
 
 
-def predict_for_all_models(run_type: int):
+def predict_for_all_models(run_id: str, ld: int = 32, s: int = 24000, run_dir_name: str = 'run_results'):
     # load vertices
     path_train = '/gpfs/data/fs71925/shepp123/frgs_6d'
     file_paths = AutoEncoderVertex24x6Dataset.get_filepaths(path_train, subset=None, subset_shuffle=False)[0]
     vertices = AutoEncoderVertex24x6Dataset.load_vertex_files(file_paths)
 
     # autoencoder
-    hidden_dims = [
-        [128, 64, 32, 8],
-        [128, 64, 32, 16],
-        [128, 64, 32, 20],
-        [128, 64, 24],
-        [128, 64, 32],
-    ]
-    ssizes = [2000, 8000, 12000, 16000]
-    seed = 12
+    hidden_dims = {
+        8: [128, 64, 32, 8],
+        16: [128, 64, 32, 16],
+        20: [128, 64, 32, 20],
+        24: [128, 64, 24],
+        32: [128, 64, 32],
+    }
     config_kwargs = {
         'hidden_dims': None,
         'epochs': 1000,
@@ -538,41 +626,29 @@ def predict_for_all_models(run_type: int):
         '3_2': {'subset_type': 'afm'},
         '3_3': {'subset_type': 'fm'},
     }
-    pred_configs = {k: v for k, v in pred_configs.items() if k.startswith(f'{run_type}_')}
-
-    for run_id, pred_config in pred_configs.items():
-        for hidden_dim in hidden_dims:
-            ld = hidden_dim[-1]
-            save_path = f'/gpfs/data/fs71925/shepp123/PhysML/saves/vertex_24x6/run_results/{run_id}_ld{ld}'
-            if os.path.exists(save_path):
-                config_kwargs['hidden_dims'] = hidden_dim
-                preds = predict_all(file_paths, vertices, save_path, config_kwargs, dataset_kwargs, 
-                                    encode_only=False, train_mode=TrainerModes.SLURM, **pred_config)
-        for s in ssizes:
-            save_path = f'/gpfs/data/fs71925/shepp123/PhysML/saves/vertex_24x6/run_results/{run_id}_s{s}'
-            if os.path.exists(save_path):
-                config_kwargs['hidden_dims'] = [128, 64, 32]
-                preds = predict_all(file_paths, vertices, save_path, config_kwargs, dataset_kwargs, 
-                                    encode_only=False, train_mode=TrainerModes.SLURM, **pred_config)
+    pred_config = pred_configs[run_id]
+    pref = f'ld{ld}' if s == 24000 else f's{s}'
+    save_path = f'/gpfs/data/fs71925/shepp123/PhysML/saves/vertex_24x6/{run_dir_name}/{run_id}_{pref}'
+    if os.path.exists(save_path):
+        config_kwargs['hidden_dims'] = hidden_dims[ld]
+        preds = predict_all(file_paths, vertices, save_path, config_kwargs, dataset_kwargs, 
+                            encode_only=False, train_mode=TrainerModes.SLURM, **pred_config)
 
 
-def evaluate_all(run_type: int):
-    latent_dims = [8, 16, 20, 24, 32]
-    ssizes = [2000, 8000, 12000, 16000]
-
+def evaluate_all(run_id: str, ld: int = 32, s: int = 24000, run_dir_name: str = 'run_results'):
     # load vertices
     path_train = '/gpfs/data/fs71925/shepp123/frgs_6d'
     file_paths = AutoEncoderVertex24x6Dataset.get_filepaths(path_train, subset=None, subset_shuffle=False)[0]
     vertices = AutoEncoderVertex24x6Dataset.load_vertex_files(file_paths)
 
     # autoencoder
-    seed = 42
+    seed = 123
     train_samples_per_vertex = 24000
     nce_train_samples = train_samples_per_vertex // 4
     test_samples_per_vertex = 2000
     dataset_kwargs = {
         'path_train': path_train, 
-        'subset_shuffle': False, 
+        'subset_shuffle': True, 
     }
 
     # phase classifier
@@ -582,17 +658,18 @@ def evaluate_all(run_type: int):
     ]
 
     # general train sets
-    nce_train_dataset = make_dataset(vertices, nce_train_samples, dataset_kwargs, dataset_class=AutoEncoder24x6InfoNCEDataset)
+    nce_train_dataset = make_dataset(vertices, nce_train_samples, dataset_kwargs, file_paths=file_paths, 
+                                     dataset_class=AutoEncoder24x6InfoNCEDataset)
 
     # reconstruction filepaths
     ex_sc_fps = AutoEncoderVertex24x6Dataset.get_filepaths(path_train, subset=0.8, subset_shuffle=dataset_kwargs['subset_shuffle'], 
-                                                        subset_seed=seed, subset_type=['afm', 'fm'], file_paths=file_paths)[0]
+                                                           subset_seed=seed, subset_type=['afm', 'fm'], file_paths=file_paths)[0]
     ex_sc_fps = list(set(file_paths) - set(ex_sc_fps))
     ex_afm_fps = AutoEncoderVertex24x6Dataset.get_filepaths(path_train, subset=0.8, subset_shuffle=dataset_kwargs['subset_shuffle'], 
                                                             subset_seed=seed, subset_type=['sc', 'fm'], file_paths=file_paths)[0]
     ex_afm_fps = list(set(file_paths) - set(ex_afm_fps))
     ex_fm_fps = AutoEncoderVertex24x6Dataset.get_filepaths(path_train, subset=0.8, subset_shuffle=dataset_kwargs['subset_shuffle'], 
-                                                        subset_seed=seed, subset_type=['afm', 'sc'], file_paths=file_paths)[0]
+                                                           subset_seed=seed, subset_type=['afm', 'sc'], file_paths=file_paths)[0]
     ex_fm_fps = list(set(file_paths) - set(ex_fm_fps))
     sc_fps = AutoEncoderVertex24x6Dataset.get_filepaths(path_train, subset=0.8, subset_shuffle=dataset_kwargs['subset_shuffle'], 
                                                         subset_seed=seed, subset_type='sc', file_paths=file_paths)[0]
@@ -605,10 +682,11 @@ def evaluate_all(run_type: int):
     fm_fps = list(set(file_paths) - set(fm_fps))
 
     # test sets
-    test_dataset_full = make_dataset(vertices, test_samples_per_vertex, dataset_kwargs, dataset_class=AutoEncoder24x6InfoNCEDataset)
+    test_dataset_full = make_dataset(vertices, test_samples_per_vertex, dataset_kwargs, file_paths=file_paths, 
+                                     dataset_class=AutoEncoder24x6InfoNCEDataset)
 
     # run info
-    base_path = '/gpfs/data/fs71925/shepp123/PhysML/saves/vertex_24x6/run_results/'
+    base_path = f'/gpfs/data/fs71925/shepp123/PhysML/saves/vertex_24x6/{run_dir_name}/'
     run_info = {
         '1_1': [],
         '1_2': [],
@@ -622,16 +700,9 @@ def evaluate_all(run_type: int):
         '3_2': afm_fps,
         '3_3': fm_fps,
     }
-    run_info = {k: v for k, v in run_info.items() if k.startswith(f'{run_type}_')}
-
     save_path = '/gpfs/data/fs71925/shepp123/PhysML/notebooks/vertex/'
     rmse_df = pd.DataFrame(columns=['run_id', 'ld', 's', 'tp', 'rmse', 'train_data'])
     classification_df = pd.DataFrame(columns=['run_id', 'ld', 's', 'f1', 'conf_mat'])
-    try:
-        rmse_df = pd.read_csv(save_path + 'reconstruction_results.csv')
-        classification_df = pd.read_pickle(save_path + 'classification_results.pkl')
-    except:
-        pass
 
     # evaluate models
     def eval(run_id: str, run_name: str, ld: int, s: int, recon_files: list[str]):
@@ -641,11 +712,11 @@ def evaluate_all(run_type: int):
             if len(rmse_df[(rmse_df['run_id'] == run_id) 
                         & (rmse_df['ld'] == ld) 
                         & (rmse_df['s'] == s)]) < len(file_paths):
-                rmses = mean_rmse(file_paths, vertices, model_path)
+                rmses = mean_rmse(vertices, model_path)
                 is_train_data = [fp not in recon_files for fp in file_paths]
                 for is_td, (tp, rmse) in zip(is_train_data, rmses.items()):
                     rmse_df.loc[len(rmse_df)] = [run_id, ld, s, tp, rmse, is_td]
-                rmse_df.to_csv(save_path + 'reconstruction_results.csv', index=False)
+                rmse_df.to_csv(save_path + f'reconstruction_results_{run_name}.csv', index=False)
 
             # classification
             if classification_df[(classification_df['run_id'] == run_id)
@@ -656,12 +727,8 @@ def evaluate_all(run_type: int):
                 model_scores = pc.evaluate_classifiers(test_dataset_full, print_conf_mat=False)
                 pc_results = list(model_scores.values())[0]
                 classification_df.loc[len(classification_df)] = [run_id, ld, s, pc_results[0]['f1'], pc_results[1]]
-                classification_df.to_pickle(save_path + 'classification_results.pkl')
+                classification_df.to_pickle(save_path + f'classification_results_{run_name}.pkl')
 
-    for run_id, recon_files in run_info.items():
-        for ld in latent_dims:
-            run_name = f'{run_id}_ld{ld}'
-            eval(run_id, run_name, ld, 24_000, recon_files)
-        for s in ssizes:
-            run_name = f'{run_id}_s{s}'
-            eval(run_id, run_name, 32, s, recon_files)
+    pref = f'ld{ld}' if s == 24000 else f's{s}'
+    run_name = f'{run_id}_{pref}'
+    eval(run_id, run_name, ld, s, run_info[run_id])
