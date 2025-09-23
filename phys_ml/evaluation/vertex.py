@@ -447,26 +447,9 @@ def plot_rmse_against_tp(rmse_df: pd.DataFrame, run_name: str, figsize: tuple[in
     plt.show()
 
 
-def _create_rmse_boxplot(ax: Axes, rmses: pd.DataFrame, xlabel: str, xtick_labels: list[str], alpha: float = 0.4, width: float = 0.5):
-    # Sort run_ids and lds for consistent plotting
-    # big_gap = 2 * width  # gap between run_id groups
-    # pos = 0
-    # small_gap = width * 1.5  # gap within group of boxplots
-    # for run_id in run_ids:
-    #     for i, subgroup in enumerate(subgroups):
-    #         subset = rmses[(rmses['run_id'] == run_id) & (rmses[subgrouping] == subgroup)]['rmse']
-    #         if not subset.empty:
-    #             data_to_plot.append(subset)
-    #             positions.append(pos)
-    #             labels.append(f"{run_id}_{subgrouping}{subgroup}")
-    #             color_list.append(vis.COLORS[i])
-    #             pos += small_gap
-    #     pos += big_gap  # add gap after each run_id group
-    # box = ax.boxplot(data_to_plot, positions=positions, widths=width, patch_artist=True)
-    # for path_patch, color in zip(box['boxes'], color_list):
-    #     path_patch.set_facecolor(color)
-    #     path_patch.set_alpha(alpha)
-
+def _create_rmse_boxplot(rmses: pd.DataFrame, xlabel: str, xtick_labels: list[str], alpha: float = 0.4, width: float = 0.5, 
+                         figsize: tuple[int, int] = (6,4)):
+    fig, ax = plt.subplots(figsize=figsize)
     positions = []
     data_to_plot = []
     pos = 0
@@ -483,6 +466,7 @@ def _create_rmse_boxplot(ax: Axes, rmses: pd.DataFrame, xlabel: str, xtick_label
     ax.set_xlabel(xlabel)
     ax.set_ylabel('RMSE')
     ax.set_xticks(positions, xtick_labels, rotation=90)
+    plt.show()
 
 
 def plot_rmse_boxplots(rmses: pd.DataFrame, train_data: bool = True, figsize: tuple[int, int] = (6,4), 
@@ -491,25 +475,17 @@ def plot_rmse_boxplots(rmses: pd.DataFrame, train_data: bool = True, figsize: tu
     if not train_data:
         rmses = rmses[rmses['run_id'].str.startswith('1_') | (rmses['train_data'] == False)]
 
-    fig, axs = plt.subplots(1, 2, figsize=figsize)
     subset = rmses[(rmses['ld'] == 32) & (rmses['s'] == 24000)]
-    # plot_data = subset[subset['run_id'].str.match(r'(1_1)|(2_._1$)|(3_.*)')]
     plot_data = subset[~subset['contrastive']]
-    _create_rmse_boxplot(axs[0], plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width)
-    # plot_data = subset[subset['run_id'].str.match(r'(1_2)|(2_._2$)')]
+    _create_rmse_boxplot(plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width, figsize)
     plot_data = subset[subset['contrastive']]
-    _create_rmse_boxplot(axs[1], plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width)
-    plt.tight_layout()
-    plt.show()
+    _create_rmse_boxplot(plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width, figsize)
 
-    fig, axs = plt.subplots(1, 2, figsize=figsize)
     subset = rmses[rmses['run_id'] == '2_1_1']
     plot_data = subset[subset['s'] == 24000]
-    _create_rmse_boxplot(axs[0], plot_data, 'latent space dimension', sorted(plot_data['ld'].unique()), alpha, width)
+    _create_rmse_boxplot(plot_data, 'latent space dimension', sorted(plot_data['ld'].unique()), alpha, width, figsize)
     plot_data = subset[subset['ld'] == 32]
-    _create_rmse_boxplot(axs[1], plot_data, 'subsamples per vertex', sorted(plot_data['s'].unique()), alpha, width)
-    plt.tight_layout()
-    plt.show()
+    _create_rmse_boxplot(plot_data, 'subsamples per vertex', sorted(plot_data['s'].unique()), alpha, width, figsize)
 
 
 
