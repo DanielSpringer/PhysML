@@ -493,9 +493,11 @@ def plot_rmse_boxplots(rmses: pd.DataFrame, train_data: bool = True, figsize: tu
 
     fig, axs = plt.subplots(1, 2, figsize=figsize)
     subset = rmses[(rmses['ld'] == 32) & (rmses['s'] == 24000)]
-    plot_data = subset[subset['run_id'].str.match(r'(1_1)|(2_._1$)|(3_.*)')]
+    # plot_data = subset[subset['run_id'].str.match(r'(1_1)|(2_._1$)|(3_.*)')]
+    plot_data = subset[~subset['contrastive']]
     _create_rmse_boxplot(axs[0], plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width)
-    plot_data = subset[subset['run_id'].str.match(r'(1_2)|(2_._2$)')]
+    # plot_data = subset[subset['run_id'].str.match(r'(1_2)|(2_._2$)')]
+    plot_data = subset[subset['contrastive']]
     _create_rmse_boxplot(axs[1], plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width)
     plt.tight_layout()
     plt.show()
