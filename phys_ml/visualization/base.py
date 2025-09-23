@@ -37,24 +37,33 @@ def get_tensorboard_data(base_path: str, folders: list[str], labels: list[str]) 
     return events_df.drop(columns='steps/epoch')
 
 
-def _tensorboard_walltimes_to_run_hours(walltimes: pd.Series) -> pd.Series:
+def _tensorboard_walltimes_to_run_hours(walltimes: pd.Series) -> float:
     return round((walltimes.max() - walltimes.min()) / 3600, 2)
 
 
-def _count_epochs_no_decrease(losses: pd.Series) -> int:
-    cummin = losses.cummin()
-    decreasing = [True] + list(cummin[1:].values < cummin[:-1].values)
-    counter = np.array(decreasing).cumsum()
-    epochs_no_decrease = pd.DataFrame({'losses': losses, 'counter': counter}).groupby('counter').count()['losses']
-    return epochs_no_decrease.max()
+def _agg_tensorboard_data(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.reset_index(drop=True)
+    epoch = df.loc[df['value'].argmin(), 'epoch']
+    sub_df = df.loc[:df[df['epoch'] == epoch].index[0]].copy()
+    sub_df['cummin'] = sub_df['value'].cummin()
+    sub_df['decreasing'] = sub_df['cummin'].diff().fillna(0) < 0
+    sub_df['counter'] = sub_df['decreasing'].cumsum()
+    g = sub_df[['value', 'epoch', 'counter']].groupby('counter').agg({'value': 'count', 'epoch': ['min', 'max']}).droplevel(0, axis=1)
+    m = g.loc[g['count'].idxmax()]
+    return pd.Series({
+        'wall time [hours]': _tensorboard_walltimes_to_run_hours(df['wall_time']), 
+        'epochs': df['epoch'].max(), 
+        'min. loss': df['value'].min(), 
+        'epoch of min. loss': epoch,
+        'max. epochs w/o decrease': m['max'] - m['min'] + 1,
+        'epoch of min. loss (10% threshold)': df[df['value'] <= (df['value'].min() * 1.1)]['epoch'].min()
+    })
 
 
 def get_tensorboard_statistics(tensorboard_data: pd.DataFrame) -> pd.DataFrame:
-    return tensorboard_data.groupby('run').agg(wall_time=pd.NamedAgg('wall_time', _tensorboard_walltimes_to_run_hours), 
-                                               epoch=pd.NamedAgg('epoch', 'max'), 
-                                               min_loss=pd.NamedAgg('value', 'min'), 
-                                               min_loss_epoch=pd.NamedAgg('value', lambda x: tensorboard_data.loc[x.argmin(), 'epoch']),
-                                               max_epochs_no_decrease=pd.NamedAgg('value', _count_epochs_no_decrease))
+    return (tensorboard_data.groupby(['run', 'ld', 's']).apply(_agg_tensorboard_data, include_groups=False)
+                            .astype({'epochs': int, 'epoch of min. loss': int, 'max. epochs w/o decrease': int, 
+                                     'epoch of min. loss (10% threshold)': int}))
 
 
 def plot_loss_progress(tensorboard_data: pd.DataFrame, labels: list[str], figsize: tuple[int, int] = (8, 4),
