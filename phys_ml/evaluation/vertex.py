@@ -564,7 +564,7 @@ from sklearn import ensemble
 from phys_ml.analysis.vertex import PhaseClassification
 
 
-def predict_for_all_models(run_id: str, ld: int = 32, s: int = 24000, run_dir_name: str = 'run_results'):
+def predict_for_all_models(run_id: str, ld: int = 32, s: int = 24000, run_dir_name: str = 'run_results', seed: int = 123):
     # load vertices
     path_train = '/gpfs/data/fs71925/shepp123/frgs_6d'
     file_paths = AutoEncoderVertex24x6Dataset.get_filepaths(path_train, subset=None, subset_shuffle=False)[0]
@@ -586,6 +586,8 @@ def predict_for_all_models(run_id: str, ld: int = 32, s: int = 24000, run_dir_na
         'num_dataloader_workers': 2, 
         'strategy': 'auto', 
         'batch_size': 8192 * 2,
+        'sample_seed': seed,
+        'subset_seed': seed,
     }
     dataset_kwargs = {
         'path_train': path_train, 
@@ -613,14 +615,13 @@ def predict_for_all_models(run_id: str, ld: int = 32, s: int = 24000, run_dir_na
                             encode_only=False, train_mode=TrainerModes.SLURM, **pred_config)
 
 
-def evaluate_all(run_id: str, ld: int = 32, s: int = 24000, run_dir_name: str = 'run_results'):
+def evaluate_all(run_id: str, ld: int = 32, s: int = 24000, run_dir_name: str = 'run_results', seed: int = 123):
     # load vertices
     path_train = '/gpfs/data/fs71925/shepp123/frgs_6d'
     file_paths = AutoEncoderVertex24x6Dataset.get_filepaths(path_train, subset=None, subset_shuffle=False)[0]
     vertices = AutoEncoderVertex24x6Dataset.load_vertex_files(file_paths)
 
     # autoencoder
-    seed = 123
     train_samples_per_vertex = 24000
     nce_train_samples = train_samples_per_vertex // 4
     test_samples_per_vertex = 2000
