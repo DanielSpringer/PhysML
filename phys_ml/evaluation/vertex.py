@@ -415,7 +415,8 @@ def mean_rmse(vertices: dict[str, np.ndarray], save_path: str, plot: bool = Fals
     return rmses
 
 
-def plot_rmse_against_tp(rmse_df: pd.DataFrame, run_name: str, figsize: tuple[int, int] = (8,4), font_size: int = 14):
+def plot_rmse_against_tp(rmse_df: pd.DataFrame, run_name: str, figsize: tuple[int, int] = (8,4), font_size: int = 14, 
+                         legend: bool = False, plot_dir: Path = Path(), plot_name: str|None = None):
     errors = rmse_df['rmse']
     mean_rmse = np.mean(errors)
     train_df = rmse_df[rmse_df['train_data']]
@@ -424,6 +425,7 @@ def plot_rmse_against_tp(rmse_df: pd.DataFrame, run_name: str, figsize: tuple[in
     test_rmses = test_df['rmse']
     train_mean = np.mean(train_rmses)
     test_mean = np.mean(test_rmses)
+    print(f'reconstruction RMSE for {run_name}')
     print(f'mean: {mean_rmse}, min: {min(errors)}, max: {max(errors)}')
     if not train_df.empty:
         print(f'training data only - mean: {train_mean}, min: {min(train_rmses)}, max: {max(train_rmses)}')
@@ -436,19 +438,24 @@ def plot_rmse_against_tp(rmse_df: pd.DataFrame, run_name: str, figsize: tuple[in
     plt.axhline(y=mean_rmse, color='tab:orange', linestyle='--', label='mean')
     plt.axhline(y=train_mean, color='tab:blue', linestyle='--', label='train mean')
     plt.axhline(y=test_mean, color='tab:pink', linestyle='--', label='test mean')
+    plt.axvline(x=0.2, color='k', linestyle=':', label='phase boundary\n(AFM-SC-FM)')
+    plt.axvline(x=0.33, color='k', linestyle=':')
     plt.xlim(-0.02, 0.52)
     plt.xticks(fontsize=font_size-2)
     plt.yticks(fontsize=font_size-2)
-    plt.title(f'reconstruction RMSE for {run_name}', fontsize=font_size)
+    # plt.title(f'reconstruction RMSE for {run_name}', fontsize=font_size)
     plt.xlabel('tp', fontsize=font_size)
     plt.ylabel('RMSE', fontsize=font_size)
-    plt.legend(fontsize=font_size-2)
+    if legend:
+        plt.legend(fontsize=font_size-2, bbox_to_anchor=(1, 1))
     plt.grid()
+    if plot_name:
+        plt.savefig(plot_dir / f'{plot_name}.png', bbox_inches='tight', dpi=300)
     plt.show()
 
 
 def _create_rmse_boxplot(rmses: pd.DataFrame, xlabel: str, xtick_labels: list[str], alpha: float = 0.4, width: float = 0.5, 
-                         figsize: tuple[int, int] = (6,4)):
+                         figsize: tuple[int, int] = (6,4), plot_dir: Path = Path(), plot_name: str|None = None):
     fig, ax = plt.subplots(figsize=figsize)
     positions = []
     data_to_plot = []
@@ -466,26 +473,33 @@ def _create_rmse_boxplot(rmses: pd.DataFrame, xlabel: str, xtick_labels: list[st
     ax.set_xlabel(xlabel)
     ax.set_ylabel('RMSE')
     ax.set_xticks(positions, xtick_labels, rotation=90)
+    if plot_name:
+        plt.savefig(plot_dir / f'{plot_name}.png', bbox_inches='tight', dpi=300)
     plt.show()
 
 
 def plot_rmse_boxplots(rmses: pd.DataFrame, train_data: bool = True, figsize: tuple[int, int] = (6,4), 
-                       alpha: float = 0.4, width: float = 0.5):
+                       alpha: float = 0.4, width: float = 0.5, plot_dir: Path = Path(), plot_name: str = ''):
+    plot_dir = Path(plot_dir)
     rmses = rmses.sort_values(by=['run_id', 'ld', 's'])
     if not train_data:
         rmses = rmses[rmses['run_id'].str.startswith('1_') | (rmses['train_data'] == False)]
 
     subset = rmses[(rmses['ld'] == 32) & (rmses['s'] == 24000)]
     plot_data = subset[~subset['contrastive']]
-    _create_rmse_boxplot(plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width, figsize)
+    _create_rmse_boxplot(plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width, figsize, 
+                         plot_dir, plot_name + '_mse')
     plot_data = subset[subset['contrastive']]
-    _create_rmse_boxplot(plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width, figsize)
+    _create_rmse_boxplot(plot_data, 'scenario', sorted(plot_data['run_id'].unique()), alpha, width, figsize, 
+                         plot_dir, plot_name + '_contr')
 
     subset = rmses[rmses['run_id'] == '2_1_1']
     plot_data = subset[subset['s'] == 24000]
-    _create_rmse_boxplot(plot_data, 'latent space dimension', sorted(plot_data['ld'].unique()), alpha, width, figsize)
+    _create_rmse_boxplot(plot_data, 'latent space dimension', sorted(plot_data['ld'].unique()), alpha, width, figsize, 
+                         plot_dir, plot_name + '_ld')
     plot_data = subset[subset['ld'] == 32]
-    _create_rmse_boxplot(plot_data, 'subsamples per vertex', sorted(plot_data['s'].unique()), alpha, width, figsize)
+    _create_rmse_boxplot(plot_data, 'subsamples per vertex', sorted(plot_data['s'].unique()), alpha, width, figsize, 
+                         plot_dir, plot_name + '_s')
 
 
 
