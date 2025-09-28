@@ -199,8 +199,7 @@ def plot_compare_slices(vertices: list[np.ndarray], i: int|tuple[int, int, int, 
             ax = axs[i * ncols + (ki - 1)]
             axis = ki * 2
             img = _create_plot(ax, data, axis, colmap=colmap, vmin=vmin, vmax=vmax, font_size=font_size)
-            label = f'${", ".join([f"k_{xj} = ({slice_at[j * 2]}, {slice_at[j * 2 + 1]})" for j, xj in 
-                                   enumerate([xi for xi in ks if xi != ki])])}$'
+            label = f'${", ".join([f"k_{xj} = ({slice_at[j * 2]}, {slice_at[j * 2 + 1]})" for j, xj in enumerate([xi for xi in ks if xi != ki])])}$'
             ax.set_title(label, fontsize=font_size - 2)
     cbar = fig.colorbar(img, ax=axs)
     cbar.ax.tick_params(labelsize=font_size-2)
