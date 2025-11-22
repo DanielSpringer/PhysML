@@ -7,7 +7,7 @@ import torch
 from ..config.vertex import *
 from ..load_data.vertex import *
 from ..wrapper.vertex import *
-from . import BaseTrainer, TrainerModes
+from . import BaseTrainer, TrainerModes, CKPT_TYPE
 
 
 class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWrapper]):
@@ -23,7 +23,7 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
         return self.config.dataset.dim * self.config.dataset.length
     
     def predict(self, vertex_path: str, new_vertex: np.ndarray|None = None, train_mode: TrainerModes|None = None, 
-                load_from: Literal['best', 'last']|str|None = None, encode_only: bool = False):
+                load_ckpt: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None = None, encode_only: bool = False):
         # load and return if prediction already exists
         subfolder = 'latentspaces' if encode_only else 'predictions'
         pred_filename = Path(vertex_path).stem
@@ -38,8 +38,8 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
                                       pin_memory=True)
 
         # predict
-        if load_from:
-            ckpt_path = self.init_trainer(train_mode, load_from)
+        if load_ckpt:
+            ckpt_path = self.init_trainer(train_mode, load_ckpt)
         else:
             ckpt_path = None
         pred_vertex = self.prepare_prediction_matrix(dataset.length, dataset.dim, encode_only, 
@@ -81,14 +81,14 @@ class VertexTrainer24x6(VertexTrainer, BaseTrainer[Vertex24x6Config, AutoEncoder
         self.config: Vertex24x6Config = self.config
 
     def predict_3d(self, vertex_path: str, new_vertex: np.ndarray|None = None, train_mode: TrainerModes|None = None, 
-                   load_from: Literal['best', 'last']|str|None = None, encode_only: bool = False) -> np.ndarray:
+                   load_ckpt: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None = None, encode_only: bool = False) -> np.ndarray:
         vertex = self.config.dataset.to_6d_vertex(new_vertex)
-        pred = self.predict(vertex_path, vertex, train_mode, load_from, encode_only)
+        pred = self.predict(vertex_path, vertex, train_mode, load_ckpt, encode_only)
         return self.dataset.to_3d_vertex(pred)
     
     def _predict_slice(self, vertex_path: str, fixed_idcs: list[int], other_k: int, dim: int, 
                        train_mode: TrainerModes|None = None, new_vertex: np.ndarray|None = None, 
-                       load_from: Literal['best', 'last']|str|None = None, encode_only: bool = False) -> np.ndarray:
+                       load_ckpt: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None = None, encode_only: bool = False) -> np.ndarray:
         assert all([i >= 1 and i <= self.dataset.n_freq for i in fixed_idcs]), \
             f"Any item in `fixed indices` must be in range [1,{self.dataset.n_freq}]."
         assert dim in [2, 4], "`dim` must be either 2 or 4."
@@ -109,8 +109,8 @@ class VertexTrainer24x6(VertexTrainer, BaseTrainer[Vertex24x6Config, AutoEncoder
                                       persistent_workers=False)
 
         # predict
-        if load_from:
-            ckpt_path = self.init_trainer(train_mode, load_from)
+        if load_ckpt:
+            ckpt_path = self.init_trainer(train_mode, load_ckpt)
         replace_at = dataset.replace_at
         pred_vertex = self.prepare_prediction_matrix(dataset.length, dim, encode_only, replace_at)
         self.wrapper.set_predictor(pred_vertex, encode_only, replace_at)
@@ -127,17 +127,17 @@ class VertexTrainer24x6(VertexTrainer, BaseTrainer[Vertex24x6Config, AutoEncoder
         return pred_vertex
     
     def predict_slice2d(self, vertex_path: str, fixed_idcs: list[int], train_mode: TrainerModes|None = None, 
-                        new_vertex: np.ndarray|None = None, load_from: Literal['best', 'last']|str|None = None, 
+                        new_vertex: np.ndarray|None = None, load_ckpt: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None = None, 
                         encode_only: bool = False) -> np.ndarray:
         pred_vertex = self._predict_slice(vertex_path, fixed_idcs, None, 2, train_mode, new_vertex, 
-                                          load_from, encode_only)
+                                          load_ckpt, encode_only)
         return pred_vertex
     
     def predict_slice4d(self, vertex_path: str, fixed_idcs: list[int], other_k: int, 
                         train_mode: TrainerModes|None = None, new_vertex: np.ndarray|None = None, 
-                        load_from: Literal['best', 'last']|str|None = None, encode_only: bool = False) -> np.ndarray:
+                        load_ckpt: Literal[CKPT_TYPE.BEST, CKPT_TYPE.LAST]|str|None = None, encode_only: bool = False) -> np.ndarray:
         pred_vertex = self._predict_slice(vertex_path, fixed_idcs, other_k, 4, train_mode, new_vertex, 
-                                          load_from, encode_only)
+                                          load_ckpt, encode_only)
         return pred_vertex
 
     def load_latentspace_slice(self, save_path: str|None = None, 

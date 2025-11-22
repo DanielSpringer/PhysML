@@ -26,6 +26,7 @@ def get_tensorboard_data(base_path: str, folders: list[str], labels: list[str]) 
         df_epoch = pd.DataFrame(event_acc.Scalars('epoch'))
         df_epoch['epoch'] = df_epoch['value']
         df = df.merge(df_epoch[['step', 'epoch']], on='step', how='left')
+        df = df.groupby('epoch').agg('last').reset_index()
         events_df = pd.concat([events_df, df], ignore_index=True)
     
     # fix missing epochs
@@ -61,9 +62,38 @@ def _agg_tensorboard_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_tensorboard_statistics(tensorboard_data: pd.DataFrame) -> pd.DataFrame:
-    return (tensorboard_data.groupby(['run', 'ld', 's']).apply(_agg_tensorboard_data, include_groups=False)
+    return (tensorboard_data.groupby(['run', 'ld', 's', 'seed']).apply(_agg_tensorboard_data, include_groups=False)
                             .astype({'epochs': int, 'epoch of min. loss': int, 'max. epochs w/o decrease': int, 
                                      'epoch of min. loss (10% threshold)': int}))
+
+
+def tensorboard_statistics_to_latex(stats_df: pd.DataFrame, ld: int = 32, s: int = 24000, seed: int = 123) -> str:
+    columns = ['run', 'wall time [hours]', 'min. loss', 'epoch of min. loss', 'max. epochs w/o decrease', 
+               'epoch of min. loss (10% threshold)']
+    df = stats_df.reset_index()
+    df = df[(df['ld'] == ld) & (df['s'] == s) & (df['seed'] == seed)]
+    df = df[columns]
+    df[columns[0]] = df[columns[0]].str.replace('_', '-')
+    df[columns[1]] = df[columns[1]].map('{:.0f}'.format)
+    df[columns[2]] = df[columns[2]].map('{:.6f}'.format)
+    df[columns[3]] = df[columns[3]].map('{:,.0f}'.format)
+    df[columns[4]] = df[columns[4]].map('{:,.0f}'.format)
+    df[columns[5]] = df[columns[5]].map('{:,.0f}'.format)
+    values_str = '\n        '.join([' & '.join(row) + r' \\' for row in df.values])
+    latex_str = (r"""\begin{table}
+    \centering
+    \begin{tabular}{lccccc}
+        \toprule
+        run & \begin{tabular}[c]{@{}c@{}} wall time\\{[hours]}\end{tabular} & min. loss & \begin{tabular}[c]{@{}c@{}}epoch of\\min. loss\end{tabular} & \begin{tabular}[c]{@{}c@{}}epoch of min. loss\\(10\% threshold)\end{tabular} & \begin{tabular}[c]{@{}c@{}}max. epochs\\w/o decrease\end{tabular}\\
+        \midrule
+        """ + values_str +
+        r"""
+        \bottomrule
+    \end{tabular}
+    \caption{Statistics for the training of each scenario (with latent space dimension of 32 and subsamples per vertex of 24,000).}
+    \label{tab:ae_converge}
+\end{table}""")
+    return latex_str
 
 
 def plot_loss_progress(tensorboard_data: pd.DataFrame, labels: list[str], figsize: tuple[int, int] = (8, 4),

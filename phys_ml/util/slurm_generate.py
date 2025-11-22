@@ -23,7 +23,7 @@ class SlurmOptions:
 
 
 def create_train_script(project_name: str, script_name: str, base_dir: str|Path, trainer_path: list[str], 
-                        trainer_kwargs: dict[str, Any]|None = None) -> None:
+                        trainer_kwargs: dict[str, Any]|None = None) -> str:
     if isinstance(base_dir, str):
         base_dir = Path(base_dir)
     trainer_classname = trainer_path[-1]
@@ -43,11 +43,14 @@ def train():
 
 
 if __name__ == '__main__':
+    print(__file__)
     train()
 """
     fdir = Path(base_dir, 'train_scripts', project_name)
     fdir.mkdir(parents=True, exist_ok=True)
-    (fdir / f'train_{script_name}.py').write_text(s)
+    train_script_name = f'{script_name}.py'
+    (fdir / train_script_name).write_text(s)
+    return train_script_name
 
 
 def create(project_name: str, script_name: str, pyenv_dir: str,
@@ -89,19 +92,18 @@ def create(project_name: str, script_name: str, pyenv_dir: str,
     current_base_dir = Path(__file__).parents[2].resolve()
     
     if not train_script_name:
-        create_train_script(project_name, script_name, current_base_dir, trainer_path, trainer_kwargs)
-        train_script_name = f'train_{script_name}.py'
+        train_script_name = create_train_script(project_name, script_name, current_base_dir, trainer_path, trainer_kwargs)
     train_script_path = (current_base_dir / 'train_scripts' / project_name / train_script_name).as_posix()
     
     s = f"""#!/bin/bash
 #
-#SBATCH -J {project_name}
+#SBATCH -J {train_script_name}_{project_name}
 #SBATCH --mail-type={slurm_options.mail_type}    # first have to state the type of event to occur 
 #SBATCH --mail-user={slurm_options.mail_user}    # and then your email address
 
 #SBATCH --partition={slurm_options.partition}
 #SBATCH --qos={slurm_options.qos}
-#SBATCH --ntasks-per-node={config.devices // config.num_nodes}
+#SBATCH {'--gres=gpu:' if config.device_type == 'gpu' else '--ntasks-per-node='}{config.devices}
 #SBATCH --nodes={config.num_nodes}
 #SBATCH --time={slurm_options.time}
 

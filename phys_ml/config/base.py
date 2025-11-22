@@ -23,8 +23,8 @@ class Config(Generic[R, S, T]):
     _base_dir: str = Path(__file__).parent.parent.parent.as_posix()  # project base working directory
     model_name: str = 'BaseModule'                                   # name of the model class
     _model_wrapper: str = 'BaseWrapper'                              # name of the model wrapper class
-    resume: Literal['best', 'last']|str|None = None                  # resume training from checkpoint from given path or
-                                                                     #    'last' - most recent checkpoint, 
+    resume: Literal['best', 'last']|str|None = 'last'                # resume training from checkpoint from given path or
+                                                                     #    'last' - last saved checkpoint, 
                                                                      #    'best' - checkpoint with best score
     save_dir: str = 'saves'                                          # base directory for saved outputs
     save_path: str = ''                                              # path to saved outputs
@@ -50,8 +50,9 @@ class Config(Generic[R, S, T]):
     weight_decay: float = 1e-05                                      # weight decay
     epochs: int = 1000                                               # number of epochs
     device_type: Literal['cpu', 'gpu', 'mps', 'xla', 'hpu'] = 'gpu'  # pytorch-lightning device type (accelerator)
-    devices: int = 1                                                 # >= <# devices (CPUs or GPUs) on partition> * `num_nodes`
+    devices: int = 'auto'                                            # number of devices (CPUs or GPUs) on per node
     num_nodes: int = 1                                               # number of nodes to use when training on the cluster
+    log_every_n_steps: int = 50                                      # logging frequency in number of steps
 
     # torch modules
     _criterion: str = 'torch.nn.MSELoss'                                  # name of the criterion class
@@ -64,11 +65,12 @@ class Config(Generic[R, S, T]):
     # lightning callbacks
     _model_checkpoint: str = 'ModelCheckpoint'                       # name of the model checkpoint class
     model_checkpoint_kwargs: dict[str, Any] = field(default_factory=lambda: {
-        'save_top_k': 1,        # Save top 10 models
+        'save_top_k': 1,        # Save top k models
         'monitor': 'val_loss',  # Monitor validation loss
         'mode': 'min',          # 'min' for minimizing the validation loss
         'verbose': True,
-        'save_last': False,
+        'save_last': True,      # save last checkpoint (allows to resume training)
+        # 'save_on_exception': True,
     })                                                                # keyword arguments for the model checkpoint class
     _callbacks: list[str] = field(default_factory=lambda: [])         # list of callback class names
     callbacks_kwargs: dict[str, dict[str, Any]] = field(default_factory=lambda: {
