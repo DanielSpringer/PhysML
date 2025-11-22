@@ -13,4 +13,4 @@
 FILES=(/gpfs/data/fs71925/shepp123/PhysML/.venv/*)
 source /gpfs/data/fs71925/shepp123/PhysML/.venv/bin/activate
 
-srun uv run C:/OneDrive - AIT/Studium/Master_5. Semester/Masters thesis/code/PhysML/train_scripts/vertex_24x6/train_vertex_2_3_1_s2000.py
+srun uv run /gpfs/data/fs71925/shepp123/PhysML/train_scripts/vertex_24x6/train_vertex_2_3_1_s2000.py

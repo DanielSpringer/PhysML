@@ -1,14 +1,14 @@
 #!/bin/bash
 #
-#SBATCH -J vertex_24x6
+#SBATCH -J pred_ae_2_3_1_ld32
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=e1015083@student.tuwien.ac.at    # and then your email address
 
-#SBATCH --partition=zen3_0512_a100x2
-#SBATCH --qos=zen3_0512_a100x2
+#SBATCH --partition=zen2_0256_a40x2
+#SBATCH --qos=zen2_0256_a40x2
 #SBATCH --ntasks-per-node=1
 #SBATCH --nodes=1
-#SBATCH --time=4:00:00
+#SBATCH --time=6:00:00
 
 FILES=(/gpfs/data/fs71925/shepp123/PhysML/.venv/*)
 source /gpfs/data/fs71925/shepp123/PhysML/.venv/bin/activate
