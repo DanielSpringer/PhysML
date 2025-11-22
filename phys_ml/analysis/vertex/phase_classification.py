@@ -78,10 +78,7 @@ class PhaseClassification:
             tp_labels.extend(tps)
             if self.encode:
                 input_vectors = input_vectors.to(self.device)
-                ls_vectors = self.vertex_trainer.wrapper.predict_step((input_vectors, idcs))
-                ls_vectors = ls_vectors.detach()
-                ls_vectors = ls_vectors.cpu()
-                ls_vectors = ls_vectors.numpy()
+                ls_vectors = self.vertex_trainer.wrapper.predict_step((input_vectors, idcs)).detach().cpu().numpy()
             else:
                 ls_vectors = input_vectors
             inputs = np.concatenate((inputs, ls_vectors), axis=0)
@@ -168,7 +165,7 @@ class PhaseClassification:
         
         # save results
         classification_df = pd.DataFrame([class_data])
-        regression_df = pd.DataFrame(reg_data)
+        regression_df = pd.DataFrame(reg_data).drop_duplicates()
         run_parameters = self.version.split('_')
         run_id = '_'.join(run_parameters[:-1])
         param, pvalue = re.split(r'([a-zA-Z]+)(\d+)', run_parameters[-1])[1:3]
@@ -218,7 +215,7 @@ class PhaseClassification:
                 self.logger.info(e)
                 self.logger.info(f'Skipping model {repr(self.models[i])}, which could not be fitted.')
         classification_df = pd.concat(classification_dfs)
-        regression_df = pd.concat(regression_dfs)
+        regression_df = pd.concat(regression_dfs).drop_duplicates()
         return classification_df, regression_df
 
 
