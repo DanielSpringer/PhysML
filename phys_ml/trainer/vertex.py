@@ -48,7 +48,7 @@ class VertexTrainer(BaseTrainer[VertexConfig, AutoEncoderVertexDataset, VertexWr
         self.trainer.predict(self.wrapper, dataloader, return_predictions=False, ckpt_path=ckpt_path)
         
         # save results to disk
-        pred_vertex = self.wrapper.pred_vertex.numpy()  # .cpu().numpy()
+        pred_vertex = self.wrapper.pred_vertex.numpy()
         self.save_prediction(pred_vertex, pred_filename, subfolder)
         return pred_vertex
     

@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from pathlib import Path
 from typing import Iterable
 
 import matplotlib as mpl
@@ -109,7 +110,7 @@ def plot_section(data: np.ndarray, axis: int|tuple[int,int], slice_at: int|tuple
 def plot_compare_grid(data: dict[str, np.ndarray], nrows: int, ncols: int, axis: int|tuple[int,int], 
                       slice_at: int|tuple[int,...]|None, figsize: tuple[int, int] = (14,6),  
                       colmap: str|mplcolors.Colormap|None = None, title: str|None = None,
-                      vmin: float|None = None, vmax: float|None = None):
+                      vmin: float|None = None, vmax: float|None = None, plot_dir: Path = Path(), plot_name: str|None = None):
     assert nrows * ncols >= len(data), \
         "Given `nrows` and `ncols` do not yield enough subplots for the length of the given data"
     labels = data.keys()
@@ -127,6 +128,8 @@ def plot_compare_grid(data: dict[str, np.ndarray], nrows: int, ncols: int, axis:
     fig.colorbar(img, ax=axs)
     if title:
         fig.suptitle(title)
+    if plot_dir and plot_name:
+        plt.savefig(plot_dir / f'{plot_name}.png', bbox_inches='tight', dpi=300)
 
 
 def plot_compare(target: np.ndarray, pred: np.ndarray, axis: int|tuple[int,int], 

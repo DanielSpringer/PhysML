@@ -29,6 +29,7 @@ RUN_ID_MAPPING = {
     '1_1': '$S_{[AFM+SC+FM]}$', 
     '1_2': '$S_{[AFM+SC+FM]}$',
     '2_1_1': '$S_{[AFM+FM]}$', 
+    '2_1_1_step': 'next $t\'$',
     '2_1_2': '$S_{[AFM+FM]}$',
     '2_2_1': '$S_{[SC+FM]}$',
     '2_2_2': '$S_{[SC+FM]}$',
@@ -439,16 +440,20 @@ def mean_rmse(vertices: dict[str, np.ndarray], save_path: str, train_files: list
         fn = Path(fp).stem
         tp = float(fn[2:6])
         true = vertices[fp]
-        pred = np.load(f'{pred_dir}/{fn}.npy')
+        try:
+            pred = np.load(f'{pred_dir}/{fn}.npy')
 
-        if plot:
-            true_slice = vertvis.get_mat_slice(true, axis, slice_at)
-            pred_slice = vertvis.get_mat_slice(pred, axis, slice_at)
-            plot_data = {'true': true_slice, 'reconstruction': pred_slice}
-            vertvis.plot_compare_grid(plot_data, nrows, ncols, axis, None, figsize=(6, 4), 
-                                      title=f'Reconstruction of vertex({fn}) at ({params_str})', vmin=0.0, vmax=22.5)
-        
-        rmse_data.append((tp, metrics.rmse(true, pred), fp in train_files))
+            if plot:
+                true_slice = vertvis.get_mat_slice(true, axis, slice_at)
+                pred_slice = vertvis.get_mat_slice(pred, axis, slice_at)
+                plot_data = {'true': true_slice, 'reconstruction': pred_slice}
+                vertvis.plot_compare_grid(plot_data, nrows, ncols, axis, None, figsize=(6, 4), 
+                                        title=f'Reconstruction of vertex({fn}) at ({params_str})', vmin=0.0, vmax=22.5)
+            
+            rmse_data.append((tp, metrics.rmse(true, pred), fp in train_files))
+        except FileNotFoundError:
+            print(f'Prediction file not found for {fn}, skipping.')
+            continue
     return pd.DataFrame(rmse_data, columns=['tp', 'rmse', 'train_data'])
 
 
@@ -543,7 +548,7 @@ def plot_rmse_boxplots(rmses: pd.DataFrame, train_data: bool = True, figsize: tu
     plot_dir = Path(plot_dir) if plot_dir else plot_dir
     rmses = rmses.sort_values(by=['run_id', 'ld', 's', 'seed'])
     if not train_data:
-        rmses = rmses[rmses['run_id'].str.startswith('1_') | (rmses['train_data'] == False)]
+        rmses = rmses[rmses['run_id'].str.startswith('1_') | ~rmses['train_data']]
 
     subset = rmses[(rmses['run_id'] == '2_3_1') & (rmses['ld'] == 32) & (rmses['s'] == 24000)]
     _create_rmse_boxplot(subset, 'scenario', 'seed', alpha, width, figsize, 
@@ -574,6 +579,11 @@ def plot_rmse_boxplots(rmses: pd.DataFrame, train_data: bool = True, figsize: tu
     plot_data = subset[(subset['run_id'] == '2_1_1') & (subset['ld'] == 32)]
     _create_rmse_boxplot(plot_data, 'subsamples per vertex', 's', alpha, width, figsize, 
                          plot_dir, plot_name + '_s2')
+    
+    plot_data = rmses[(rmses['run_id'] == '2_1_1_step') 
+                      | ((rmses['run_id'] == '2_1_1') & (rmses['ld'] == 32) & (rmses['s'] == 24000))]
+    _create_rmse_boxplot(plot_data, 'scenarios', 'run_id', alpha, width, figsize, 
+                         plot_dir, plot_name + '_step')
 
 
 
@@ -941,7 +951,7 @@ def evaluate_all(run_id: str, ld: int = 32, s: int = 24000, run_dir_name: str|No
 
     # run info
     base_path = Path('/gpfs/data/fs71925/shepp123/PhysML/saves/vertex_24x6')
-    save_path = '/gpfs/data/fs71925/shepp123/PhysML/notebooks/vertex/'
+    save_path = '/gpfs/data/fs71925/shepp123/PhysML/notebooks/vertex/eval_results/'
 
     # evaluate models
     def eval(run_id: str, run_name: str, ld: int, s: int, seed: int, train_files: list[str], device: Literal['cpu', 'cuda']|None = None):
