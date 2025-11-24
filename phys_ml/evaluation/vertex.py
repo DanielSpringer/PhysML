@@ -588,6 +588,69 @@ def plot_rmse_boxplots(rmses: pd.DataFrame, train_data: bool = True, figsize: tu
 
 
 # ----------------------------------------------------------------------------------------------
+# ANALYZE RECONSTRUCTION ERROR
+# ----------------------------------------------------------------------------------------------
+def load_vertex(save_path: Path, tp: float) -> np.ndarray:
+    pref = f'tp{tp:.2f}'
+    fn = next(save_path.glob(f'{pref}*.h5'))
+    return AutoEncoderVertex24x6Dataset.load_from_file(fn)
+
+
+def load_prediction(save_path: Path, tp: float) -> np.ndarray:
+    pref = f'tp{tp:.2f}'
+    fn = next((save_path / 'predictions').glob(f'{pref}*.npy'))
+    return np.load(fn)
+
+
+def load_vertices(plot_data: list[tuple[str, list[float]]], data_dir: Path, 
+                  base_dir: Path) -> list[tuple[np.ndarray, np.ndarray, str, float]]:
+    vertex_data = []
+    for run_id, tps in plot_data:
+        save_path = base_dir / run_id
+        for tp in tps:
+            vertex = load_vertex(data_dir, tp).flatten()
+            pred = load_prediction(save_path, tp).flatten()
+            sort_idcs = np.argsort(vertex)
+            vertex = vertex[sort_idcs]
+            pred = pred[sort_idcs]
+            vertex_data.append((vertex, pred, run_id, tp))
+    return vertex_data
+
+
+def plot_vertex_error(vertex: np.ndarray, pred: np.ndarray, bars: bool, nbins: int = 12, width_factor: float = 0.45, 
+                      figsize: tuple[int, int] = (4, 3), legend: bool = False, plot_dir: Path = Path(), 
+                      plot_name: str|None = None) -> pd.DataFrame:
+    bin_edges = np.linspace(vertex.min(), vertex.max(), nbins + 1)
+    v_means = []
+    p_means = []
+    for i in range(nbins):
+        if i == 0:
+            idcs = vertex < bin_edges[i+1]
+        elif i == nbins - 1:
+            idcs = vertex >= bin_edges[i]
+        else:
+            idcs = (vertex >= bin_edges[i]) & (vertex < bin_edges[i+1])
+        v_means.append(vertex[idcs].mean())
+        p_means.append(pred[idcs].mean())
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+    plt.figure(figsize=figsize)
+    if bars:
+        width = (bin_edges[1] - bin_edges[0]) * width_factor
+        plt.bar(bin_centers - width / 2, v_means, width=width, label='true vertex', color=vis.COLORS[0], align='center')
+        plt.bar(bin_centers + width / 2, p_means, width=width, label='reconstruction', color=vis.COLORS[1], align='center')
+    else:
+        plt.plot(bin_centers, v_means, label='true vertex', color=vis.COLORS[0])
+        plt.plot(bin_centers, p_means, label='reconstruction', color=vis.COLORS[1])
+    if legend:
+        plt.legend()
+    if plot_dir and plot_name:
+        plt.savefig(plot_dir / f'{plot_name}.png', bbox_inches='tight', dpi=300)
+    plt.show()
+
+
+
+# ----------------------------------------------------------------------------------------------
 # EVALUATE PHASE CLASSIFIER
 # ----------------------------------------------------------------------------------------------
 def _plot_classification(classifications: pd.DataFrame, xlabel: str, category_key: str, y_min: float, alpha: float = 0.4,
