@@ -457,6 +457,10 @@ def mean_rmse(vertices: dict[str, np.ndarray], save_path: str, train_files: list
     return pd.DataFrame(rmse_data, columns=['tp', 'rmse', 'train_data'])
 
 
+
+# ----------------------------------------------------------------------------------------------
+# ANALYZE AUTOENCODER
+# ----------------------------------------------------------------------------------------------
 def plot_rmse_against_tp(rmse_df: pd.DataFrame, run_name: str, figsize: tuple[int, int] = (6, 3), font_size: int = 14, 
                          legend: bool = False, ymin: float|None = None, ymax: float|None = None, plot_dir: Path = Path(), 
                          plot_name: str|None = None):
@@ -476,13 +480,13 @@ def plot_rmse_against_tp(rmse_df: pd.DataFrame, run_name: str, figsize: tuple[in
         print(f'test data only - mean: {test_mean}, min: {min(test_rmses)}, max: {max(test_rmses)}')
     plt.figure(figsize=figsize)
     plt.plot(rmse_df['tp'], errors, color='tab:blue', zorder=0)
-    plt.scatter(train_df['tp'], train_rmses, marker='o', color='tab:blue', label='train data')
-    plt.scatter(test_df['tp'], test_rmses, marker='o', color='tab:pink', label='test data')
+    plt.scatter(train_df['tp'], train_rmses, marker='o', color='tab:blue', label='training vertices')
+    plt.scatter(test_df['tp'], test_rmses, marker='o', color='tab:pink', label='unseen vertices')
     
     # statistics lines
     plt.axhline(y=mean_rmse, color='tab:orange', linestyle='--', label='mean')
-    plt.axhline(y=train_mean, color='tab:blue', linestyle='--', label='train mean')
-    plt.axhline(y=test_mean, color='tab:pink', linestyle='--', label='test mean')
+    plt.axhline(y=train_mean, color='tab:blue', linestyle='--', label='mean (training vertices)')
+    plt.axhline(y=test_mean, color='tab:pink', linestyle='--', label='mean (unseen vertices)')
 
     # phase borders
     plt.axvline(x=0.2, color='k', alpha=0.4, linestyle=':', label='phase boundary\n(AFM-SC-FM)')
@@ -498,7 +502,7 @@ def plot_rmse_against_tp(rmse_df: pd.DataFrame, run_name: str, figsize: tuple[in
         plt.ylim(top=ymax)
     plt.yticks(fontsize=font_size-2)
     # plt.title(f'reconstruction RMSE for {run_name}', fontsize=font_size)
-    plt.xlabel('tp', fontsize=font_size)
+    plt.xlabel("$t'$", fontsize=font_size)
     plt.ylabel('RMSE', fontsize=font_size)
 
     # phase labels
@@ -551,7 +555,7 @@ def plot_rmse_boxplots(rmses: pd.DataFrame, train_data: bool = True, figsize: tu
         rmses = rmses[rmses['run_id'].str.startswith('1_') | ~rmses['train_data']]
 
     subset = rmses[(rmses['run_id'] == '2_3_1') & (rmses['ld'] == 32) & (rmses['s'] == 24000)]
-    _create_rmse_boxplot(subset, 'scenario', 'seed', alpha, width, figsize, 
+    _create_rmse_boxplot(subset, 'data sampling seed', 'seed', alpha, width, figsize, 
                          plot_dir, plot_name + '_subsets')
 
     subset = rmses[(rmses['ld'] == 32) & (rmses['s'] == 24000) & (rmses['seed'] == 123)]
@@ -586,6 +590,25 @@ def plot_rmse_boxplots(rmses: pd.DataFrame, train_data: bool = True, figsize: tu
                          plot_dir, plot_name + '_step')
 
 
+def plot_rmse_per_vertex_and_seed(df: pd.DataFrame, figsize: tuple[int, int] = (8,3), 
+                                  plot_dir: Path = Path(), plot_name: str|None = None):
+    # compare RMSE per vertex and seed
+    seeds = df['seed'].sort_values().unique()
+
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.vlines(np.arange(0., 0.33, 0.01), ymin=df['rmse'].min(), ymax=df['rmse'].max(), lw=1, color='k', alpha=0.2)
+    for i, seed in enumerate(seeds):
+        df_seed = df[df['seed'] == seed]
+        ax.plot(df_seed['tp'], df_seed['rmse'], marker='o', markerfacecolor='w', color=vis.COLORS[i], label=f'Seed {seed}')
+    ax.set_xlabel("vertex by $t'$-parameter")
+    ax.set_ylabel('RMSE')
+    plt.legend()
+    plt.tight_layout()
+    if plot_dir and plot_name:
+        plt.savefig(plot_dir / f'{plot_name}.png', bbox_inches='tight', dpi=300)
+    plt.show()
+
+
 
 # ----------------------------------------------------------------------------------------------
 # ANALYZE RECONSTRUCTION ERROR
@@ -617,9 +640,10 @@ def load_vertices(plot_data: list[tuple[str, list[float]]], data_dir: Path,
     return vertex_data
 
 
-def plot_vertex_error(vertex: np.ndarray, pred: np.ndarray, bars: bool, nbins: int = 12, width_factor: float = 0.45, 
+def plot_vertex_error(vertex: np.ndarray, pred: np.ndarray, bars: bool, predict: bool = False, nbins: int = 12, width_factor: float = 0.45, 
                       figsize: tuple[int, int] = (4, 3), legend: bool = False, plot_dir: Path = Path(), 
                       plot_name: str|None = None) -> pd.DataFrame:
+    pred_label = 'prediction' if predict else 'reconstruction'
     bin_edges = np.linspace(vertex.min(), vertex.max(), nbins + 1)
     v_means = []
     p_means = []
@@ -638,10 +662,10 @@ def plot_vertex_error(vertex: np.ndarray, pred: np.ndarray, bars: bool, nbins: i
     if bars:
         width = (bin_edges[1] - bin_edges[0]) * width_factor
         plt.bar(bin_centers - width / 2, v_means, width=width, label='true vertex', color=vis.COLORS[0], align='center')
-        plt.bar(bin_centers + width / 2, p_means, width=width, label='reconstruction', color=vis.COLORS[1], align='center')
+        plt.bar(bin_centers + width / 2, p_means, width=width, label=pred_label, color=vis.COLORS[1], align='center')
     else:
         plt.plot(bin_centers, v_means, label='true vertex', color=vis.COLORS[0])
-        plt.plot(bin_centers, p_means, label='reconstruction', color=vis.COLORS[1])
+        plt.plot(bin_centers, p_means, label=pred_label, color=vis.COLORS[1])
     if legend:
         plt.legend()
     if plot_dir and plot_name:

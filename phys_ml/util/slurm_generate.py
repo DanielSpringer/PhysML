@@ -97,7 +97,7 @@ def create(project_name: str, script_name: str, pyenv_dir: str,
     
     s = f"""#!/bin/bash
 #
-#SBATCH -J {train_script_name}_{project_name}
+#SBATCH -J {train_script_name.split('.')[0]}_{project_name}
 #SBATCH --mail-type={slurm_options.mail_type}    # first have to state the type of event to occur 
 #SBATCH --mail-user={slurm_options.mail_user}    # and then your email address
 

@@ -130,6 +130,7 @@ def plot_compare_grid(data: dict[str, np.ndarray], nrows: int, ncols: int, axis:
         fig.suptitle(title)
     if plot_dir and plot_name:
         plt.savefig(plot_dir / f'{plot_name}.png', bbox_inches='tight', dpi=300)
+    plt.show()
 
 
 def plot_compare(target: np.ndarray, pred: np.ndarray, axis: int|tuple[int,int], 
@@ -227,17 +228,20 @@ def plot_compare_slices(vertices: list[np.ndarray], i: int|tuple[int, int, int, 
     plt.show()
 
 
-def plot_correlation(cor_mat: np.ndarray, title: str, vmin: float = 0.5, vmax: float = 1.0):
+def plot_correlation(cor_mat: np.ndarray, title: str, figsize: tuple[int, int] = (6, 5), vmin: float = 0.5, vmax: float = 1.0,
+                     plot_dir: Path = Path(), plot_name: str = ''):
     # Create the heatmap
-    plt.figure(figsize=(6, 5))
+    plt.figure(figsize=figsize)
     plt.imshow(cor_mat, extent=[0, 0.5, 0, 0.5], cmap='coolwarm', interpolation='nearest', origin="lower", vmin=vmin, vmax=vmax)
     plt.colorbar(label='Correlation Coefficient')
 
     # Add labels
     plt.title(title)
-    plt.xlabel('tp')
-    plt.ylabel('tp')
+    plt.xlabel("$t'$")
+    plt.ylabel("$t'$")
     plt.tight_layout()
+    if plot_dir and plot_name:
+        plt.savefig(plot_dir / f'{plot_name}.png', bbox_inches='tight', dpi=300)
     plt.show()
 
 
