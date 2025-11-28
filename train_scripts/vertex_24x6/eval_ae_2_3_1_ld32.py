@@ -5,5 +5,4 @@ from phys_ml.evaluation import vertex as verteval
 
 
 if __name__ == '__main__':
-    print(__file__)
-    verteval.evaluate_all('2_3_1', 32, 24000, 'run_results_2', 123, models=['rf'])
+    verteval.evaluate_all('2_3_1', 32, 24000, 'run_results_3', 123, models=['rf'])

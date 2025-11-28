@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-#SBATCH -J vertex_24x6
+#SBATCH -J eval_ae_1_1_ld32
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=e1015083@student.tuwien.ac.at    # and then your email address
 
 #SBATCH --partition=zen2_0256_a40x2
 #SBATCH --qos=zen2_0256_a40x2
-#SBATCH --ntasks-per-node=1
+#SBATCH --gres=gpu:1
 #SBATCH --nodes=1
 #SBATCH --time=00:45:00
 
