@@ -103,8 +103,9 @@ def create(project_name: str, script_name: str, pyenv_dir: str,
 
 #SBATCH --partition={slurm_options.partition}
 #SBATCH --qos={slurm_options.qos}
-#SBATCH {'--gres=gpu:' if config.device_type == 'gpu' else '--ntasks-per-node='}{config.devices}
 #SBATCH --nodes={config.num_nodes}
+#SBATCH --ntasks-per-node={config.devices}
+{f'#SBATCH --gres=gpu:{config.devices}' if config.device_type == 'gpu' else ''}
 #SBATCH --time={slurm_options.time}
 
 FILES=({venv_files})

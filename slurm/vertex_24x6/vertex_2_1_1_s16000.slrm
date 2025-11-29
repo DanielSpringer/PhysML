@@ -6,8 +6,9 @@
 
 #SBATCH --partition=zen3_0512_a100x2
 #SBATCH --qos=zen3_0512_a100x2
-#SBATCH --gres=gpu:2
 #SBATCH --nodes=1
+#SBATCH --ntasks-per-node=2
+#SBATCH --gres=gpu:2
 #SBATCH --time=20:00:00
 
 FILES=(/gpfs/data/fs71925/shepp123/PhysML/.venv/*)
