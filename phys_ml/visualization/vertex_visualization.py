@@ -246,19 +246,19 @@ def plot_correlation(cor_mat: np.ndarray, title: str, figsize: tuple[int, int] =
 
 
 def print_conf_mat(conf_mat: np.ndarray, name: str, labels: list[str], figsize: tuple[int, int] = (5.5, 5), font_size: int = 14,
-                   save_path: str = None):
+                   plot_dir: Path = Path(), plot_name: str = ''):
+    print(name)
     fig, ax = plt.subplots(figsize=figsize)
     # ax = ax.imshow(conf_mat, cmap="coolwarm")
     ax = sns.heatmap(conf_mat, annot=True, xticklabels=labels, yticklabels=labels, 
-                     vmin=0.0, vmax=1.0, fmt=".2f", ax=ax, square=True, annot_kws={"size": font_size}, cmap="coolwarm")
+                     vmin=0.0, vmax=1.0, fmt=".3f", ax=ax, square=True, annot_kws={"size": font_size}, cmap="coolwarm")
     cbar = ax.collections[0].colorbar
     cbar.ax.tick_params(labelsize=font_size-2)
     ax.tick_params(left=False, bottom=False)
     plt.xticks(fontsize=font_size-2)
     plt.yticks(fontsize=font_size-2)
-    print(name)
     plt.xlabel('Predicted', fontsize=font_size)
     plt.ylabel('True', fontsize=font_size)
-    if save_path:
-        plt.savefig(save_path, format="pdf", bbox_inches="tight")
+    if plot_dir and plot_name:
+        plt.savefig(plot_dir / f'{plot_name}.png', bbox_inches='tight', dpi=300)
     plt.show()
