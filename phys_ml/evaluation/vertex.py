@@ -30,6 +30,9 @@ RUN_ID_MAPPING = {
     '1_2': '$S_{[AFM+SC+FM]}$',
     '2_1_1': '$S_{[AFM+FM]}$', 
     '2_1_1_step': 'next $t\'$',
+    '2_1_1_step_64': 'next $t\'$\n(64,000)', 
+    '2_1_1_step_128': 'next $t\'$\n(128,000)', 
+    '2_1_1_64': '$S_{[AFM+FM]}$\n(64,000)',
     '2_1_2': '$S_{[AFM+FM]}$',
     '2_2_1': '$S_{[SC+FM]}$',
     '2_2_2': '$S_{[SC+FM]}$',
@@ -235,9 +238,10 @@ def eval_train(trainer: VertexTrainer, info_dict: list[dict[str, Any]], info_fil
 # ----------------------------------------------------------------------------------------------
 def _create_loss_plot(tensorboard_data: pd.DataFrame, category_key: str, y_max: float = 0.2, smooth: int = 4, 
                       alpha: float = 0.3, log: bool = False, figsize: tuple[int, int] = (4, 3), 
-                      plot_dir: Path = Path(), plot_name: str|None = None):
+                      plot_dir: Path = Path(), plot_name: str|None = None, labels: list[str]|None = None):
     grouped_df = tensorboard_data.groupby(['run', 'ld', 's'])
-    labels = sorted(tensorboard_data[category_key].unique())
+    if labels is None:
+        labels = sorted(tensorboard_data[category_key].unique())
     if category_key == 'run':
         labels = [RUN_ID_MAPPING.get(x, x) for x in labels]
     cmap = vis.get_cmap(grouped_df.ngroups, 'hsv')
@@ -274,11 +278,11 @@ def plot_loss_progress(tensorboard_data: pd.DataFrame, y_maxs: tuple[float, floa
     plot_data = subset[(subset['run'] == '2_1_1') & (subset['s'] == 24000)]
     _create_loss_plot(plot_data, 'ld', y_maxs[2], smooth, alpha, log, 
                       figsize, plot_dir, plot_name + '_ld')
-    plot_data = subset[(subset['run'] == '2_3_1') & (subset['ld'] == 32)]
+    plot_data = subset[(subset['run'] == '2_1_1') & (subset['ld'] == 32)]
     _create_loss_plot(plot_data, 's', y_maxs[3], smooth, alpha, log, 
                       figsize, plot_dir, plot_name + '_s')
     
-    subset = data[(data['run'] == '2_3_1') & (data['ld'] == 32) & (data['s'] == 24000)]
+    subset = data[(data['run'] == '2_1_1') & (data['ld'] == 32) & (data['s'] == 24000)]
     grouped_runs = subset.groupby('seed')
     fig, ax = plt.subplots(figsize=figsize)
     for i, (seed, group) in enumerate(grouped_runs):
@@ -521,8 +525,9 @@ def plot_rmse_against_tp(rmse_df: pd.DataFrame, run_name: str, figsize: tuple[in
 
 
 def _create_rmse_boxplot(rmses: pd.DataFrame, xlabel: str, category_key: str, alpha: float = 0.4, width: float = 0.5, 
-                         figsize: tuple[int, int] = (4, 3), plot_dir: Path = Path(), plot_name: str|None = None):
-    xtick_labels = sorted(rmses[category_key].unique())
+                         figsize: tuple[int, int] = (4, 3), plot_dir: Path = Path(), plot_name: str|None = None, xtick_labels: list[str]|None = None):
+    if xtick_labels is None:
+        xtick_labels = sorted(rmses[category_key].unique())
     if category_key == 'run_id':
         xtick_labels = [RUN_ID_MAPPING.get(label, label) for label in xtick_labels]
     fig, ax = plt.subplots(figsize=figsize)
@@ -554,7 +559,7 @@ def plot_rmse_boxplots(rmses: pd.DataFrame, train_data: bool = True, figsize: tu
     if not train_data:
         rmses = rmses[rmses['run_id'].str.startswith('1_') | ~rmses['train_data']]
 
-    subset = rmses[(rmses['run_id'] == '2_3_1') & (rmses['ld'] == 32) & (rmses['s'] == 24000)]
+    subset = rmses[(rmses['run_id'] == '2_1_1') & (rmses['ld'] == 32) & (rmses['s'] == 24000)]
     _create_rmse_boxplot(subset, 'data sampling seed', 'seed', alpha, width, figsize, 
                          plot_dir, plot_name + '_subsets')
 
@@ -576,18 +581,19 @@ def plot_rmse_boxplots(rmses: pd.DataFrame, train_data: bool = True, figsize: tu
     _create_rmse_boxplot(plot_data, 'latent space dimension', 'ld', alpha, width, figsize, 
                          plot_dir, plot_name + '_ld')
     
-    plot_data = subset[(subset['run_id'] == '2_3_1') & (subset['ld'] == 32)]
+    plot_data = subset[(subset['run_id'] == '2_1_1') & (subset['ld'] == 32)]
     _create_rmse_boxplot(plot_data, 'subsamples per vertex', 's', alpha, width, figsize, 
                          plot_dir, plot_name + '_s')
 
-    plot_data = subset[(subset['run_id'] == '2_1_1') & (subset['ld'] == 32)]
+    plot_data = subset[(subset['run_id'] == '2_3_1') & (subset['ld'] == 32)]
     _create_rmse_boxplot(plot_data, 'subsamples per vertex', 's', alpha, width, figsize, 
                          plot_dir, plot_name + '_s2')
     
     plot_data = rmses[(rmses['run_id'] == '2_1_1_step') 
-                      | ((rmses['run_id'] == '2_1_1') & (rmses['ld'] == 32) & (rmses['s'] == 24000))]
-    _create_rmse_boxplot(plot_data, 'scenarios', 'run_id', alpha, width, figsize, 
-                         plot_dir, plot_name + '_step')
+                      | ((rmses['run_id'] == '2_1_1') & (rmses['ld'] == 32) & (rmses['s'] == 64000))]
+    xlabels = ['2_1_1_64', '2_1_1_step_64', '2_1_1_step_128']
+    _create_rmse_boxplot(plot_data, 'scenarios', 'run_id', alpha, width, figsize,
+                         plot_dir, plot_name + '_step', xlabels)
 
 
 def plot_rmse_per_vertex_and_seed(df: pd.DataFrame, figsize: tuple[int, int] = (8,3), 
@@ -734,7 +740,7 @@ def plot_classification_results(classifications: pd.DataFrame, figsize: tuple[in
     plot_data = subset[subset['run_id'].str.match(r'(1_2)|(2_._2$)|(no_*)')]
     _plot_classification(plot_data, 'scenario', 'run_id', y_min, alpha, figsize, plot_dir, plot_name + '_contr')
 
-    subset = classifications[(classifications['run_id'] == '2_1_1') & (classifications['s'] == 24000)]
+    subset = classifications[(classifications['run_id'] == '2_1_1') & (classifications['s'] == 24000) & (classifications['seed'] == 123)]
     plot_data = subset[(subset['ld'] == 32)].copy()
     plot_data['model'] = plot_data['model'].apply(lambda x: labels_mapping.get(x, x.split('(')[0]))
     y_min_models = (int(plot_data['f1'].min() * y_factor) - 1) / y_factor
@@ -743,7 +749,7 @@ def plot_classification_results(classifications: pd.DataFrame, figsize: tuple[in
     plot_data = subset[subset['model'].str.startswith('RandomForestClassifier')]
     _plot_classification(plot_data, 'latent space dimension', 'ld', y_min, alpha, figsize, plot_dir, plot_name + '_ld')
 
-    subset = classifications[(classifications['run_id'] == '2_3_1') & (classifications['ld'] == 32)]
+    subset = classifications[classifications['model'].str.startswith('RandomForestClassifier') & (classifications['run_id'] == '2_1_1') & (classifications['ld'] == 32)]
     plot_data = subset[(subset['s'] == 24000)]
     _plot_classification(plot_data, 'subset random seed', 'seed', y_min, alpha, figsize, plot_dir, plot_name + '_subsets')
 

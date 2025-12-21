@@ -175,7 +175,7 @@ class PhaseClassification:
                 ld = int(pvalue)
             case 's':
                 s = int(pvalue)
-            case 'seed':
+            case 'r':
                 seed = int(pvalue)
             case _:
                 pass

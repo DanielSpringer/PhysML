@@ -6,7 +6,6 @@
 
 #SBATCH --partition=zen2_0256_a40x2
 #SBATCH --qos=zen2_0256_a40x2
-#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:1
 #SBATCH --time=72:00:00
