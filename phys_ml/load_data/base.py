@@ -1,4 +1,7 @@
 from abc import ABC, abstractmethod
+from typing import Any
+
+import numpy as np
 
 import torch
 from torch.utils.data import Dataset
@@ -17,21 +20,8 @@ class FilebasedDataset(Dataset, ABC):
         ----------
         config : Config
             A Config instance.
-        """        
-
         """
-        :param config: A Config instance.
-        :type config: Config
-        
-        :param subset: Number of data items to load.
-                       Either as integer to specify the absolute count or as float to specifiy the percentage of the existing data. 
-                       Minimum items loaded is 1. (defaults to 1.0)
-        :type subset: int | float, optional
-        
-        :param shuffle: If loading a subset, determines if items are selected from the directory in alphabetical order or randomly. 
-                        (defaults to True)
-        :type shuffle: bool, optional
-        """
+        self.config = config
     
     @staticmethod
     @abstractmethod
@@ -51,3 +41,22 @@ class FilebasedDataset(Dataset, ABC):
             Data as `torch.Tensor`.
         """
         pass
+
+
+class SimpleDataset(Dataset):
+    def __init__(self, inputs: np.ndarray, targets: list[Any]|None = None):
+        self.inputs = torch.tensor(inputs, dtype=torch.float32)
+        if targets is not None:
+            if isinstance(targets[0], int):
+                self.targets = torch.tensor(targets, dtype=torch.long)
+            else:
+                self.targets = torch.tensor(targets, dtype=torch.float32)
+        
+    def __len__(self):
+        return len(self.inputs)
+    
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        if hasattr(self, 'targets'):
+            return self.inputs[idx], self.targets[idx]
+        else:
+            return self.inputs[idx]

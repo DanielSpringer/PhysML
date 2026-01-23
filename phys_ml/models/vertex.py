@@ -33,7 +33,7 @@ class AutoEncoderVertex(BaseModule[VertexConfig]):
     def encode(self, data_in) -> torch.Tensor:
         if self.config.positional_encoding:
             idcs = data_in[0] / self.in_dim
-            x = self.embedding(torch.cat([idcs, data_in[1]], axis=1))
+            x = self.embedding(torch.cat([idcs, data_in[1]], dim=1))
         else:
             x = self.embedding(data_in)
         x = self.encoder(x)
@@ -41,4 +41,50 @@ class AutoEncoderVertex(BaseModule[VertexConfig]):
 
     def decode(self, data_in) -> torch.Tensor:
         x = self.decoder(data_in)
+        return x
+
+
+class ContrastiveAutoEncoder(AutoEncoderVertex):
+    def forward(self, data_in) -> tuple[torch.Tensor, torch.Tensor]:
+        latent = self.encode(data_in)
+        recon = self.decode(latent)
+        return recon, latent
+
+
+class UNetVertex(BaseModule[VertexConfig]):
+    def __init__(self, config: VertexConfig, in_dim: int):
+        super().__init__(config, in_dim)
+        self.matrix_dim = config.matrix_dim
+        
+        self.embedding = nn.Linear(in_dim, config.hidden_dims[0])
+
+        self.encoder_layers = nn.ModuleList([nn.Linear(config.hidden_dims[i], config.hidden_dims[i + 1]) 
+                                             for i in range(len(config.hidden_dims) - 1)])
+        
+        decoder_dims = config.hidden_dims[1:][::-1]
+        self.decoder_layers = nn.ModuleList([nn.Linear(decoder_dims[i], decoder_dims[i + 1]) 
+                                             for i in range(len(decoder_dims) - 1)])
+        self.out = nn.Linear(decoder_dims[-1], config.out_dim)
+        
+    def encode(self, data_in) -> list[torch.Tensor]:
+        x = self.embedding(data_in)
+        encodings = [x]
+        for layer in self.encoder_layers:
+            x = self.activation(x)
+            x = layer(x)
+            encodings.append(x)
+        return encodings
+
+    def decode(self, data_in, encodings: list[torch.Tensor]) -> torch.Tensor: 
+        x = data_in
+        for layer in self.decoder_layers:
+            x = self.activation(x)
+            x = layer(encodings.pop() + x)
+        x = self.out(x)
+        return x
+    
+    def forward(self, data_in) -> torch.Tensor:
+        encodings = self.encode(data_in)
+        x = encodings.pop()
+        x = self.decode(x, encodings)
         return x

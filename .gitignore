@@ -3,4 +3,6 @@
 __pycache__
 slurm-*.out
 .ipynb_checkpoints/
-/notebooks/vertex/models/*
+/notebooks/vertex/eval_results
+/notebooks/vertex/pc_results
+/notebooks/vertex/classifier_models

@@ -1,32 +1,38 @@
 from collections.abc import Callable
+from pathlib import Path
 from typing import Iterable
 
 import matplotlib as mpl
 import matplotlib.axes as axes
 import matplotlib.colors as mplcolors
+import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 
 import numpy as np
+import seaborn as sns
 
 from ..load_data.vertex import AutoEncoderVertexDataset
 
 
 cmap_big = mpl.colormaps['twilight_shifted'].resampled(int(1e3))
 #cmap_resc = mplcolors.ListedColormap(cmap_big(np.linspace(0.075, 0.925, 10000)))
-cmap_resc = mpl.colormaps['viridis'].resampled(int(1e3))
+# cmap_resc = mpl.colormaps['viridis'].resampled(int(1e3))
+cmap_resc = mpl.colormaps['coolwarm'].resampled(int(1e3))
+cmap_resc.set_bad(color='black')
 color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 
 def _plot(data: np.ndarray, ax: axes.Axes, x_label: str, y_label: str, colmap: str|mplcolors.Colormap, 
-          vmin: float|None = None, vmax: float|None = None, title: str|None = None):
+          vmin: float|None = None, vmax: float|None = None, title: str|None = None, font_size: int = 14):
     cmap = colmap if colmap else cmap_resc
     img = ax.imshow(data, cmap=cmap)
     if vmin is not None and vmax is not None:
         img.set_clim(vmin=vmin, vmax=vmax)
-    ax.set_xticks([]) 
+    ax.set_xticks([])
     ax.set_yticks([])
-    ax.set_xlabel(x_label, fontsize=14)
-    ax.set_ylabel(y_label, fontsize=14)
+    ax.tick_params(labelsize=font_size - 2)
+    ax.set_xlabel(x_label, fontsize=font_size)
+    ax.set_ylabel(y_label, fontsize=font_size)
     ax.set_title(title)
     return img
 
@@ -60,7 +66,7 @@ def get_mat_slice(mat: np.ndarray, axis: int|tuple[int,int], slice_at: int|tuple
 
 
 def _create_plot(ax: axes.Axes, data: np.ndarray, axis: int, colmap: str|mplcolors.Colormap|None = None, 
-                 vmin: float|None = None, vmax: float|None = None, title: str|None = None):
+                 vmin: float|None = None, vmax: float|None = None, title: str|None = None, font_size: int = 14):
     k_dim, n_freq = AutoEncoderVertexDataset.k_dim, AutoEncoderVertexDataset.n_freq
     space_dim, length = AutoEncoderVertexDataset.space_dim, AutoEncoderVertexDataset.length
     dim = len(data.shape)
@@ -80,7 +86,7 @@ def _create_plot(ax: axes.Axes, data: np.ndarray, axis: int, colmap: str|mplcolo
         x_label, y_label = f'$k_{{{k}_x}}$', f'$k_{{{k}_y}}$'
     else:
         x_label, y_label = '', ''
-    img = _plot(data, ax, x_label, y_label, colmap, vmin, vmax, title)
+    img = _plot(data, ax, x_label, y_label, colmap, vmin, vmax, title, font_size=font_size)
     return img
 
 
@@ -89,7 +95,7 @@ def _prepare_data(data: list[np.ndarray], axis: int|tuple[int,int],
     for i, d in enumerate(data):
         if len(d.shape) != 2 and slice_at is not None:
             data[i] = get_mat_slice(d, axis, slice_at)
-    return data, min([d.min() for d in data]), max([d.max() for d in data])
+    return data, min([np.nanmin(d) for d in data]), max([np.nanmax(d) for d in data])
 
 
 def plot_section(data: np.ndarray, axis: int|tuple[int,int], slice_at: int|tuple[int,...],
@@ -103,11 +109,14 @@ def plot_section(data: np.ndarray, axis: int|tuple[int,int], slice_at: int|tuple
 
 def plot_compare_grid(data: dict[str, np.ndarray], nrows: int, ncols: int, axis: int|tuple[int,int], 
                       slice_at: int|tuple[int,...]|None, figsize: tuple[int, int] = (14,6),  
-                      colmap: str|mplcolors.Colormap|None = None, title: str|None = None):
+                      colmap: str|mplcolors.Colormap|None = None, title: str|None = None,
+                      vmin: float|None = None, vmax: float|None = None, plot_dir: Path = Path(), plot_name: str|None = None):
     assert nrows * ncols >= len(data), \
         "Given `nrows` and `ncols` do not yield enough subplots for the length of the given data"
     labels = data.keys()
-    data, vmin, vmax = _prepare_data(list(data.values()), axis, slice_at)
+    data, vmin_, vmax_ = _prepare_data(list(data.values()), axis, slice_at)
+    vmin = vmin if vmin is not None else vmin_
+    vmax = vmax if vmax is not None else vmax_
     fig, axs = plt.subplots(nrows, ncols, figsize=figsize, layout='compressed', subplot_kw={'aspect': 'equal'})
     axs = axs.flatten()
     for ax, label, d in zip(axs, labels, data):
@@ -119,6 +128,9 @@ def plot_compare_grid(data: dict[str, np.ndarray], nrows: int, ncols: int, axis:
     fig.colorbar(img, ax=axs)
     if title:
         fig.suptitle(title)
+    if plot_dir and plot_name:
+        plt.savefig(plot_dir / f'{plot_name}.png', bbox_inches='tight', dpi=300)
+    plt.show()
 
 
 def plot_compare(target: np.ndarray, pred: np.ndarray, axis: int|tuple[int,int], 
@@ -158,24 +170,95 @@ def lineplot_compare(data: dict[int, np.ndarray], target: np.ndarray|None = None
 
 
 def lineplot(x_list: Iterable[Iterable], y_list: Iterable[Iterable], labels: list|None = None,
-             title: str|None = None, figSize: tuple[int, int] = (10,4), lim=None, 
+             title: str|None = None, figsize: tuple[int, int] = (10,4), lim=None, 
              xlabel: str|None = None, ylabel: str|None = None, xticks: list|None = None):
-    plt.figure(figsize=figSize)
+    plt.figure(figsize=figsize)
     for i, (x, y) in enumerate(zip(x_list, y_list)):
         plt.plot(x, y, color=color_cycle[i], label=labels[i] if labels else None)
     _set_lineplot(bool(labels), title, lim, xlabel, ylabel, xticks)
     plt.show()
 
 
-def plot_correlation(cor_mat: np.ndarray, title: str):
+def plot_compare_slices(vertices: list[np.ndarray], i: int|tuple[int, int, int, int] = 18, axis: int = 5, figsize: tuple[int, int] = (12, 10), 
+                        colmap: str|mplcolors.Colormap|None = None, vmin: float|None = None, vmax: float|None = None, font_size: int = 14):
+    slice_at = i if isinstance(i, tuple) else (i, i, i, i)
+    nrows, ncols = 3, 3
+    vertex_phases = ['AFM', 'SC', 'FM']
+    data_dict = {}
+    for i, vertex in enumerate(vertices):
+        for ki in range(1, 4):
+            axis = ki * 2
+            data_dict[(i, ki)] = get_mat_slice(vertex, axis, slice_at)
+    if vmin is None:
+        vmin = min([np.nanmin(d) for d in data_dict.values()])
+    if vmax is None:
+        vmax = max([np.nanmax(d) for d in data_dict.values()])
+    
+    fig, axs = plt.subplots(nrows, ncols, figsize=figsize, subplot_kw={'aspect': 'equal'}, gridspec_kw={'hspace': 0.4})
+    axs = axs.flatten()
+    ks = range(1,4)
+    for i, vertex in enumerate(vertices):
+        for ki in ks:
+            data = data_dict[(i, ki)]
+            ax = axs[i * ncols + (ki - 1)]
+            axis = ki * 2
+            img = _create_plot(ax, data, axis, colmap=colmap, vmin=vmin, vmax=vmax, font_size=font_size)
+            label = f'${", ".join([f"k_{xj} = ({slice_at[j * 2]}, {slice_at[j * 2 + 1]})" for j, xj in enumerate([xi for xi in ks if xi != ki])])}$'
+            ax.set_title(label, fontsize=font_size - 2)
+    cbar = fig.colorbar(img, ax=axs)
+    cbar.ax.tick_params(labelsize=font_size-2)
+    # fig.suptitle(f'Visualization of vertices sliced at coordinates {slice_at}', fontsize=font_size)
+
+    for row, label in enumerate(['AFM', 'SC', 'FM']):
+        # Add border around each row
+        row_axes = axs[row * ncols:(row + 1) * ncols]
+        bboxes = [ax.get_position(fig) for ax in row_axes]
+        x0 = min([bbox.x0 for bbox in bboxes]) - 0.045
+        y0 = min([bbox.y0 for bbox in bboxes]) - 0.035
+        x1 = max([bbox.x1 for bbox in bboxes]) + 0.015
+        y1 = max([bbox.y1 for bbox in bboxes]) + 0.03
+        rect = patches.Rectangle((x0, y0), x1 - x0, y1 - y0, linewidth=2, edgecolor=None, 
+                                 facecolor='#f0f0f0', transform=fig.transFigure, zorder=-1)
+        fig.patches.append(rect)
+
+        # Add label to each row
+        y_center = np.mean([bbox.y0 + bbox.height / 2 for bbox in bboxes])
+        x_left = min([bbox.x0 for bbox in bboxes]) - 0.02
+        fig.text(x_left, y_center, label, va='center', ha='right', rotation=90, fontsize=font_size)
+    plt.show()
+
+
+def plot_correlation(cor_mat: np.ndarray, title: str, figsize: tuple[int, int] = (6, 5), vmin: float = 0.5, vmax: float = 1.0,
+                     plot_dir: Path = Path(), plot_name: str = ''):
     # Create the heatmap
-    plt.figure(figsize=(6, 5))
-    plt.imshow(cor_mat, extent=[0, 0.5, 0, 0.5], cmap='coolwarm', interpolation='nearest', origin="lower")
+    plt.figure(figsize=figsize)
+    plt.imshow(cor_mat, extent=[0, 0.5, 0, 0.5], cmap='coolwarm', interpolation='nearest', origin="lower", vmin=vmin, vmax=vmax)
     plt.colorbar(label='Correlation Coefficient')
 
     # Add labels
     plt.title(title)
-    plt.xlabel('tp')
-    plt.ylabel('tp')
+    plt.xlabel("$t'$")
+    plt.ylabel("$t'$")
     plt.tight_layout()
+    if plot_dir and plot_name:
+        plt.savefig(plot_dir / f'{plot_name}.png', bbox_inches='tight', dpi=300)
+    plt.show()
+
+
+def print_conf_mat(conf_mat: np.ndarray, name: str, labels: list[str], figsize: tuple[int, int] = (5.5, 5), font_size: int = 14,
+                   plot_dir: Path = Path(), plot_name: str = ''):
+    print(name)
+    fig, ax = plt.subplots(figsize=figsize)
+    # ax = ax.imshow(conf_mat, cmap="coolwarm")
+    ax = sns.heatmap(conf_mat, annot=True, xticklabels=labels, yticklabels=labels, 
+                     vmin=0.0, vmax=1.0, fmt=".3f", ax=ax, square=True, annot_kws={"size": font_size}, cmap="coolwarm")
+    cbar = ax.collections[0].colorbar
+    cbar.ax.tick_params(labelsize=font_size-2)
+    ax.tick_params(left=False, bottom=False)
+    plt.xticks(fontsize=font_size-2)
+    plt.yticks(fontsize=font_size-2)
+    plt.xlabel('Predicted', fontsize=font_size)
+    plt.ylabel('True', fontsize=font_size)
+    if plot_dir and plot_name:
+        plt.savefig(plot_dir / f'{plot_name}.png', bbox_inches='tight', dpi=300)
     plt.show()
